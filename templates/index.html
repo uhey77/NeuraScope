@@ -1,0 +1,71 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>arXiv 新着論文ビューア</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 900px; margin: auto; background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #333; }
+        .category-selector { margin-bottom: 20px; text-align: center; }
+        .category-selector label { margin-right: 10px; }
+        .category-selector select, .category-selector button { padding: 8px; border-radius: 4px; border: 1px solid #ddd; }
+        .paper { border: 1px solid #eee; padding: 15px; margin-bottom: 15px; background-color: #f9f9f9; border-radius: 4px; }
+        .paper h2 { margin-top: 0; font-size: 1.4em; color: #0056b3;}
+        .paper p { margin: 5px 0; }
+        .paper .authors { font-style: italic; color: #555; font-size: 0.9em; }
+        .paper .published-date { font-size: 0.8em; color: #777; }
+        .paper .summary { font-size: 0.95em; line-height: 1.5; max-height: 100px; overflow-y: auto; border-left: 3px solid #007bff; padding-left: 10px; margin-top: 10px;}
+        .paper .links a { margin-right: 10px; text-decoration: none; color: #007bff; }
+        .paper .links a:hover { text-decoration: underline; }
+        .error { color: red; text-align: center; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>arXiv 新着論文</h1>
+
+        <div class="category-selector">
+            <form method="GET" action="/">
+                <label for="category">カテゴリ選択:</label>
+                <select name="category" id="category">
+                    {% for cat in categories %}
+                    <option value="{{ cat }}" {% if cat == selected_category %}selected{% endif %}>{{ cat }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit">表示</button>
+            </form>
+        </div>
+
+        {% if error_message %}
+            <p class="error">{{ error_message }}</p>
+        {% endif %}
+
+        {% if papers %}
+            {% for paper in papers %}
+            <div class="paper">
+                <h2><a href="{{ paper.link_arxiv }}" target="_blank">{{ paper.title }}</a></h2>
+                <p class="authors"><strong>Authors:</strong> {{ paper.authors }}</p>
+                <p class="published-date"><strong>Published:</strong> {{ paper.published_date }}</p>
+                <div class="summary">
+                    <p><strong>Summary:</strong></p>
+                    {{ paper.summary | safe }} {# HTMLタグを許容する場合はsafeフィルター #}
+                </div>
+                <p class="links">
+                    <a href="{{ paper.link_arxiv }}" target="_blank">arXiv Page</a>
+                    {% if paper.link_pdf %}
+                    | <a href="{{ paper.link_pdf }}" target="_blank">PDF</a>
+                    {% endif %}
+                </p>
+            </div>
+            {% endfor %}
+        {% else %}
+            {% if not error_message %}
+            <p>論文が見つかりませんでした。カテゴリを変更するか、時間をおいて再度お試しください。</p>
+            {% endif %}
+        {% endif %}
+    </div>
+</body>
+</html>
