@@ -2,7 +2,7 @@
 .python-version
 __pycache__
 .mypy_cache
-
+paper/__pycache__
 # 環境変数
 .env
 

@@ -9,7 +9,7 @@ class ArxivFetchError(Exception):
     """arXivからの情報取得エラー用のカスタム例外"""
     pass
 
-def fetch_arxiv_papers(category="cs.AI", max_results=10, timeout=10):
+def fetch_arxiv_papers(category="cs.AI", max_results=10, timeout=20):
     """
     指定されたarXivカテゴリの最新論文情報をRSSフィードから取得する。
     ネットワークエラーやパースエラーを考慮。
