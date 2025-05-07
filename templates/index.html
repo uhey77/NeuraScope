@@ -1,41 +1,75 @@
-<!-- templates/index.html -->
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>arXiv 新着論文ビューア</title>
+    <title>AI Research Navigator - arXiv</title>
     <style>
-        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
-        .container { max-width: 900px; margin: auto; background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        h1 { text-align: center; color: #333; }
-        .category-selector { margin-bottom: 20px; text-align: center; }
-        .category-selector label { margin-right: 10px; }
-        .category-selector select, .category-selector button { padding: 8px; border-radius: 4px; border: 1px solid #ddd; }
-        .paper { border: 1px solid #eee; padding: 15px; margin-bottom: 15px; background-color: #f9f9f9; border-radius: 4px; }
-        .paper h2 { margin-top: 0; font-size: 1.4em; color: #0056b3;}
-        .paper p { margin: 5px 0; }
-        .paper .authors { font-style: italic; color: #555; font-size: 0.9em; }
-        .paper .published-date { font-size: 0.8em; color: #777; }
-        .paper .summary { font-size: 0.95em; line-height: 1.5; max-height: 100px; overflow-y: auto; border-left: 3px solid #007bff; padding-left: 10px; margin-top: 10px;}
-        .paper .links a { margin-right: 10px; text-decoration: none; color: #007bff; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; background-color: #eef2f5; color: #333; line-height: 1.6; }
+        .navbar { background-color: #343a40; padding: 1rem 2rem; color: white; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
+        .navbar h1 { margin: 0; font-size: 1.8em; }
+        .navbar h1 a { color: white; text-decoration: none;}
+        .nav-links a { color: white; text-decoration: none; margin-left: 20px; font-size: 1.1em; }
+        .nav-links a:hover { text-decoration: underline; }
+        .container { max-width: 960px; margin: auto; padding: 0 20px 20px 20px; }
+        .category-selector { background-color: #fff; padding: 15px; border-radius: 8px; margin-bottom: 25px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
+        .category-selector label { font-weight: bold; }
+        .category-selector select, .category-selector button { padding: 10px 15px; border-radius: 5px; border: 1px solid #ced4da; font-size: 1em; }
+        .category-selector button { background-color: #007bff; color: white; cursor: pointer; border-color: #007bff; }
+        .category-selector button:hover { background-color: #0056b3; }
+        .paper { background-color: #fff; border: 1px solid #dee2e6; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: box-shadow 0.3s ease; position: relative; }
+        .paper:hover { box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .paper h2 { margin-top: 0; font-size: 1.3em; color: #0056b3; margin-bottom: 8px; }
+        .paper h2 a { text-decoration: none; color: inherit; }
+        .paper h2 a:hover { text-decoration: underline; }
+        .paper .meta-info { font-size: 0.85em; color: #6c757d; margin-bottom: 12px; }
+        .paper .meta-info span { margin-right: 15px; display: inline-block; margin-bottom: 3px;}
+        .paper .summary { font-size: 0.95em; line-height: 1.7; color: #495057; border-left: 3px solid #17a2b8; padding-left: 15px; margin-top: 10px; margin-bottom: 15px; }
+        .summary-content { max-height: 7.5em; /* 約4-5行 */ overflow: hidden; position: relative; transition: max-height 0.4s ease-in-out; }
+        .summary-content.expanded { max-height: 1000px; /* 十分な高さ */ }
+        .read-more { color: #007bff; cursor: pointer; font-weight: bold; display: inline-block; margin-top: 8px; font-size: 0.9em; }
+        .read-more:hover { text-decoration: underline; }
+        .paper .links { margin-top:15px; font-size: 0.9em; }
+        .paper .links a { margin-right: 15px; text-decoration: none; color: #007bff; font-weight: bold; }
         .paper .links a:hover { text-decoration: underline; }
-        .error { color: red; text-align: center; margin-bottom: 20px; }
+        .error { color: #dc3545; background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 15px; border-radius: 5px; text-align: center; margin-bottom: 20px; }
+        .action-buttons { margin-top: 10px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;}
+        .favorite-btn, .translate-btn { padding: 6px 12px; cursor: pointer; border-radius: 4px; font-size: 0.85em; border: 1px solid; transition: background-color 0.2s ease, color 0.2s ease; }
+        .favorite-btn { border-color: #ffc107; background-color: transparent; color: #ffc107; }
+        .favorite-btn.favorited { background-color: #ffc107; color: #fff; }
+        .translate-btn { border-color: #28a745; background-color: transparent; color: #28a745; }
+        .translate-btn:disabled { background-color: #e9ecef; color: #6c757d; border-color: #ced4da; cursor: not-allowed;}
+        .translation-area { margin-top:15px; padding:15px; background-color:#f0f8ff; border: 1px solid #cfe2ff; border-radius:4px; font-size: 0.9em;}
+        .translation-area h4 { margin-top:0; margin-bottom: 10px; color: #004085; font-size: 1.1em;}
+        .translation-area p { margin-bottom: 8px; }
+        .translated-summary-wrapper { margin-top: 5px; }
+        .translated-summary { line-height: 1.6; }
+        .pagination { text-align: center; margin-top: 30px; margin-bottom: 20px; }
+        .pagination a, .pagination span { display: inline-block; padding: 8px 12px; margin: 0 3px; border: 1px solid #ddd; text-decoration: none; color: #007bff; border-radius: 4px; }
+        .pagination a:hover { background-color: #f0f0f0; }
+        .pagination .current-page { background-color: #007bff; color: white; border-color: #007bff; }
+        .pagination .disabled { color: #aaa; border-color: #eee; cursor: default; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>arXiv 新着論文</h1>
+    <div class="navbar">
+        <h1><a href="{{ url_for('index') }}">AI Research Navigator</a></h1>
+        <div class="nav-links">
+            <a href="{{ url_for('index') }}">ホーム</a>
+            <a href="{{ url_for('favorites_page') }}">お気に入り</a>
+        </div>
+    </div>
 
+    <div class="container">
         <div class="category-selector">
-            <form method="GET" action="/">
-                <label for="category">カテゴリ選択:</label>
-                <select name="category" id="category">
+            <form method="GET" action="{{ url_for('index') }}">
+                <label for="category">カテゴリ:</label>
+                <select name="category" id="category" onchange="this.form.submit()">
                     {% for cat in categories %}
                     <option value="{{ cat }}" {% if cat == selected_category %}selected{% endif %}>{{ cat }}</option>
                     {% endfor %}
                 </select>
-                <button type="submit">表示</button>
+                <!-- <button type="submit">表示</button> -->
             </form>
         </div>
 
@@ -45,27 +79,178 @@
 
         {% if papers %}
             {% for paper in papers %}
-            <div class="paper">
-                <h2><a href="{{ paper.link_arxiv }}" target="_blank">{{ paper.title }}</a></h2>
-                <p class="authors"><strong>Authors:</strong> {{ paper.authors }}</p>
-                <p class="published-date"><strong>Published:</strong> {{ paper.published_date }}</p>
-                <div class="summary">
-                    <p><strong>Summary:</strong></p>
-                    {{ paper.summary | safe }} {# HTMLタグを許容する場合はsafeフィルター #}
+            <div class="paper" id="paper-{{ paper.arxiv_id }}">
+                <h2>
+                    <a href="{{ paper.link_arxiv }}" target="_blank" rel="noopener noreferrer">
+                        {% if paper.translated_title_ja %}
+                            {{ paper.translated_title_ja }} <span style="font-size:0.8em; color:#777;">(原文: {{ paper.title }})</span>
+                        {% else %}
+                            {{ paper.title }}
+                        {% endif %}
+                    </a>
+                </h2>
+                <div class="meta-info">
+                    <span><strong>Authors:</strong> {{ paper.authors if paper.authors else 'N/A' }}</span>
+                    <span><strong>Published:</strong> {{ paper.published_date_str if paper.published_date_str else 'N/A' }}</span>
+                    <span><strong>ID:</strong> {{ paper.arxiv_id }}</span>
                 </div>
-                <p class="links">
-                    <a href="{{ paper.link_arxiv }}" target="_blank">arXiv Page</a>
+
+                {% if paper.summary %}
+                <div class="summary">
+                    <div class="summary-content" id="summary-{{ paper.arxiv_id }}">
+                        <p><strong>Summary (Original):</strong></p>
+                        {{ paper.summary | safe }}
+                    </div>
+                    <span class="read-more" onclick="toggleSummary('summary-{{ paper.arxiv_id }}', this)">続きを読む</span>
+                </div>
+                {% endif %}
+                
+                <div class="links">
+                    <a href="{{ paper.link_arxiv }}" target="_blank" rel="noopener noreferrer">arXiv Page</a>
                     {% if paper.link_pdf %}
-                    | <a href="{{ paper.link_pdf }}" target="_blank">PDF</a>
+                    | <a href="{{ paper.link_pdf }}" target="_blank" rel="noopener noreferrer">PDF</a>
                     {% endif %}
-                </p>
+                </div>
+
+                <div class="action-buttons">
+                    <button class="favorite-btn {% if paper.is_favorite %}favorited{% endif %}"
+                            data-arxiv-id="{{ paper.arxiv_id }}"
+                            data-title="{{ paper.title }}"
+                            data-link-arxiv="{{ paper.link_arxiv }}"
+                            onclick="toggleFavorite(this)">
+                        {% if paper.is_favorite %}★ 解除{% else %}☆ お気に入り{% endif %}
+                    </button>
+                    <button class="translate-btn"
+                            data-arxiv-id="{{ paper.arxiv_id }}"
+                            onclick="requestTranslation(this, '{{ paper.arxiv_id }}')"
+                            {% if paper.translated_title_ja and paper.translated_summary_ja %}disabled{% endif %}>
+                        {% if paper.translated_title_ja and paper.translated_summary_ja %}和訳表示中{% else %}和訳する{% endif %}
+                    </button>
+                </div>
+
+                <div class="translation-area" id="translation-{{ paper.arxiv_id }}" style="display: {% if paper.translated_title_ja or paper.translated_summary_ja %}block{% else %}none{% endif %};">
+                    <h4>和訳:</h4>
+                    <p><strong>タイトル:</strong> <span class="translated-title">{{ paper.translated_title_ja | default('', true) }}</span></p>
+                    <div class="translated-summary-wrapper">
+                      <p><strong>概要:</strong></p>
+                      <div class="translated-summary">{{ paper.translated_summary_ja | default('', true) | replace('\n', '<br>') | safe }}</div>
+                    </div>
+                </div>
             </div>
             {% endfor %}
-        {% else %}
-            {% if not error_message %}
-            <p>論文が見つかりませんでした。カテゴリを変更するか、時間をおいて再度お試しください。</p>
+
+            {% if total_pages > 1 %}
+            <div class="pagination">
+                {% if current_page > 1 %}
+                    <a href="{{ url_for('index', category=selected_category, page=current_page-1) }}">« 前へ</a>
+                {% else %}
+                    <span class="disabled">« 前へ</span>
+                {% endif %}
+
+                {% for page_num in range(1, total_pages + 1) %}
+                    {% if page_num == current_page %}
+                        <span class="current-page">{{ page_num }}</span>
+                    {% elif page_num - current_page < 3 and current_page - page_num < 3 or page_num == 1 or page_num == total_pages %}
+                        <a href="{{ url_for('index', category=selected_category, page=page_num) }}">{{ page_num }}</a>
+                    {% elif page_num - current_page == 3 or current_page - page_num == 3 %}
+                        <span>...</span>
+                    {% endif %}
+                {% endfor %}
+
+                {% if current_page < total_pages %}
+                    <a href="{{ url_for('index', category=selected_category, page=current_page+1) }}">次へ »</a>
+                {% else %}
+                    <span class="disabled">次へ »</span>
+                {% endif %}
+            </div>
             {% endif %}
+
+        {% elif not error_message %}
+            <p>このカテゴリの論文は現在登録されていません。しばらくしてから再読み込みしてください。</p>
         {% endif %}
     </div>
+
+    <script>
+    function toggleSummary(summaryId, button) {
+        const summaryContent = document.getElementById(summaryId);
+        if (!summaryContent) return;
+        summaryContent.classList.toggle('expanded');
+        if (summaryContent.classList.contains('expanded')) {
+            button.textContent = '折りたたむ';
+        } else {
+            button.textContent = '続きを読む';
+        }
+    }
+
+    async function toggleFavorite(button) {
+        const arxivId = button.dataset.arxivId;
+        const title = button.dataset.title;
+        const linkArxiv = button.dataset.linkArxiv;
+
+        try {
+            const response = await fetch("{{ url_for('favorite_toggle_route') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ arxiv_id: arxivId, title: title, link_arxiv: linkArxiv }),
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                if (result.status === 'added') {
+                    button.classList.add('favorited');
+                    button.textContent = '★ 解除';
+                } else if (result.status === 'removed') {
+                    button.classList.remove('favorited');
+                    button.textContent = '☆ お気に入り';
+                }
+            } else {
+                alert('お気に入り操作に失敗: ' + (result.message || '不明なエラー'));
+            }
+        } catch (error) {
+            console.error('Favorite toggle error:', error);
+            alert('お気に入り操作中に通信エラーが発生しました。');
+        }
+    }
+
+    async function requestTranslation(button, arxivId) {
+        const translationArea = document.getElementById(`translation-${arxivId}`);
+        if (!translationArea) return;
+        const translatedTitleElem = translationArea.querySelector('.translated-title');
+        const translatedSummaryElem = translationArea.querySelector('.translated-summary');
+
+        button.textContent = '翻訳中...';
+        button.disabled = true;
+
+        try {
+            const response = await fetch("{{ url_for('translate_article_route') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ arxiv_id: arxivId })
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                translatedTitleElem.textContent = result.translated_title;
+                translatedSummaryElem.innerHTML = result.translated_summary.replace(/\n/g, '<br>');
+                translationArea.style.display = 'block';
+                button.textContent = '和訳表示中';
+                // ボタンはdisabledのままにするか、再度翻訳不可にする
+            } else {
+                translatedTitleElem.textContent = '翻訳エラー';
+                translatedSummaryElem.textContent = result.message || '翻訳に失敗しました。';
+                translationArea.style.display = 'block'; // エラーメッセージ表示のため
+                button.textContent = '和訳失敗 (再試行)';
+                button.disabled = false;
+            }
+        } catch (error) {
+            console.error('Translation request error:', error);
+            translatedTitleElem.textContent = '通信エラー';
+            translatedSummaryElem.textContent = '翻訳リクエスト中に通信エラーが発生しました。';
+            translationArea.style.display = 'block';
+            button.textContent = '和訳失敗 (再試行)';
+            button.disabled = false;
+        }
+    }
+    </script>
 </body>
 </html>

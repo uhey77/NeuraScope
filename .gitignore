@@ -1,5 +1,7 @@
 .venv
 .python-version
+__pycache__
+.mypy_cache
 
 # 環境変数
 .env
