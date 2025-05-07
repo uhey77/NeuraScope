@@ -6,14 +6,11 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 import atexit
 import pytz
-from dotenv import load_dotenv # .envファイル対応
 
-# .envファイルから環境変数を読み込む (translate_util.pyでも呼んでいるが念のため)
-load_dotenv()
 
 from paper.arxiv_fetcher import fetch_arxiv_papers, ArxivFetchError
 # translate_utilから必要な関数をインポート
-from translate_util import translate_text_openai, ask_openai_about_paper, OPENAI_API_KEY as TU_OPENAI_API_KEY
+from translate_util import translate_text_openai, ask_openai_about_paper
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -214,11 +211,6 @@ def translate_article_route():
 
 @app.route('/ask-ai', methods=['POST']) # ★★★ 新しいエンドポイント ★★★
 def ask_ai_route():
-    # APIキーの存在を最初に確認 (translate_util.py内でもチェックされるが念のため)
-    if not TU_OPENAI_API_KEY or "sk-YOUR_API_KEY_HERE" in TU_OPENAI_API_KEY or not TU_OPENAI_API_KEY.startswith("sk-"):
-        print(f"--- [app.py /ask-ai] OpenAI API key is not properly configured. Key read: {TU_OPENAI_API_KEY[:10]}... ---")
-        return jsonify({'success': False, 'message': 'AIサービスの設定に問題があります。管理者に連絡してください。'}), 500
-
     data = request.json
     arxiv_id = data.get('arxiv_id')
     user_question = data.get('question')

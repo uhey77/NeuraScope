@@ -12,4 +12,5 @@ dependencies = [
     "openai>=1.77.0",
     "pytz>=2025.2",
     "requests>=2.32.3",
+    "tiktoken>=0.9.0",
 ]

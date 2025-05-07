@@ -2,29 +2,11 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 
-# .envファイルから環境変数を読み込む
 load_dotenv()
-
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-# print(f"--- [translate_util.py] Loaded OPENAI_API_KEY (initial): {OPENAI_API_KEY} ---") # デバッグ用
-
-client = None
-if OPENAI_API_KEY and "sk-YOUR_API_KEY_HERE" not in OPENAI_API_KEY and OPENAI_API_KEY.startswith("sk-"):
-    try:
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        # print("--- [translate_util.py] OpenAI client initialized successfully. ---")
-    except Exception as e:
-        print(f"--- [translate_util.py] Failed to initialize OpenAI client: {e} ---")
-else:
-    if not OPENAI_API_KEY:
-        print("--- [translate_util.py] OpenAI API key is not found in environment variables. ---")
-    elif "sk-YOUR_API_KEY_HERE" in OPENAI_API_KEY:
-        print("--- [translate_util.py] OpenAI API key is a placeholder. Please set a valid key. ---")
-    elif not OPENAI_API_KEY.startswith("sk-"):
-         print(f"--- [translate_util.py] OpenAI API key format seems incorrect: {OPENAI_API_KEY[:10]}... ---")
+client = OpenAI()
 
 
-def translate_text_openai(text, target_language="Japanese", model="gpt-3.5-turbo"):
+def translate_text_openai(text, target_language="Japanese", model="gpt-4.1-mini"):
     """OpenAI APIを使ってテキストを翻訳する"""
     if not client:
         return "[Translation service not available: API client not initialized or API key issue]"
@@ -96,8 +78,6 @@ def ask_openai_about_paper(paper_title, paper_abstract, user_question, model="gp
 
 
 if __name__ == '__main__':
-    print(f"--- translate_util.py self-test ---")
-    print(f"Loaded OPENAI_API_KEY: {OPENAI_API_KEY}")
     if not client:
         print("OpenAI client not initialized. Cannot run full tests.")
     else:

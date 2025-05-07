@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Research Navigator - arXiv</title>
+
+    <!-- ====== CSS ====== -->
     <style>
+        /* …… ここは元のスタイルをそのまま貼り付け …… */
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; background-color: #eef2f5; color: #333; line-height: 1.6; }
         .navbar { background-color: #343a40; padding: 1rem 2rem; color: white; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
         .navbar h1 { margin: 0; font-size: 1.8em; }
@@ -50,6 +53,7 @@
         .pagination a:hover { background-color: #f0f0f0; }
         .pagination .current-page { background-color: #007bff; color: white; border-color: #007bff; }
         .pagination .disabled { color: #aaa; border-color: #eee; cursor: default; }
+
         /* モーダル共通スタイル */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); padding-top: 60px; }
         .modal-content { background-color: #fefefe; margin: 5% auto; padding: 25px; border: 1px solid #888; width: 80%; max-width: 700px; border-radius: 8px; position: relative; box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2),0 6px 20px 0 rgba(0,0,0,0.19); }
@@ -65,7 +69,9 @@
         #askAiLoading { display:none; text-align:center; margin-top:10px; }
     </style>
 </head>
+
 <body>
+    <!-- ====== Navbar ====== -->
     <div class="navbar">
         <h1><a href="{{ url_for('index') }}">AI Research Navigator</a></h1>
         <div class="nav-links">
@@ -75,6 +81,7 @@
     </div>
 
     <div class="container">
+        <!-- ====== Category Selector ====== -->
         <div class="category-selector">
             <form method="GET" action="{{ url_for('index') }}">
                 <label for="category">カテゴリ:</label>
@@ -95,10 +102,14 @@
             <div class="paper" id="paper-{{ paper.arxiv_id }}">
                 <h2>
                     <a href="{{ paper.link_arxiv }}" target="_blank" rel="noopener noreferrer">
-                        {% if paper.translated_title_ja %}{{ paper.translated_title_ja }} <span style="font-size:0.8em; color:#777;">(原文: {{ paper.title }})</span>
-                        {% else %}{{ paper.title }}{% endif %}
+                        {% if paper.translated_title_ja %}
+                            {{ paper.translated_title_ja }} <span style="font-size:0.8em; color:#777;">(原文: {{ paper.title }})</span>
+                        {% else %}
+                            {{ paper.title }}
+                        {% endif %}
                     </a>
                 </h2>
+
                 <div class="meta-info">
                     <span><strong>Authors:</strong> {{ paper.authors if paper.authors else 'N/A' }}</span>
                     <span><strong>Published:</strong> {{ paper.published_date_str if paper.published_date_str else 'N/A' }}</span>
@@ -114,37 +125,49 @@
                     <span class="read-more" onclick="toggleSummary('summary-{{ paper.arxiv_id }}', this)">続きを読む</span>
                 </div>
                 {% endif %}
-                
+
                 <div class="links">
                     <a href="{{ paper.link_arxiv }}" target="_blank" rel="noopener noreferrer">arXiv Page</a>
                     {% if paper.link_pdf %}| <a href="{{ paper.link_pdf }}" target="_blank" rel="noopener noreferrer">PDF</a>{% endif %}
                 </div>
 
+                <!-- ====== Action Buttons ====== -->
                 <div class="action-buttons">
-                    <button class="favorite-btn {% if paper.is_favorite %}favorited{% endif %}"
-                            data-arxiv-id="{{ paper.arxiv_id }}" data-title="{{ paper.title }}" data-link-arxiv="{{ paper.link_arxiv }}"
+                    <button type="button"
+                            class="favorite-btn {% if paper.is_favorite %}favorited{% endif %}"
+                            data-arxiv-id="{{ paper.arxiv_id }}"
+                            data-title="{{ paper.title|e }}"
+                            data-link-arxiv="{{ paper.link_arxiv }}"
                             onclick="toggleFavorite(this)">
                         {% if paper.is_favorite %}★ 解除{% else %}☆ お気に入り{% endif %}
                     </button>
-                    <button class="translate-btn" data-arxiv-id="{{ paper.arxiv_id }}" onclick="requestTranslation(this, '{{ paper.arxiv_id }}')"
+
+                    <button type="button"
+                            class="translate-btn"
+                            data-arxiv-id="{{ paper.arxiv_id }}"
+                            onclick="requestTranslation(this, '{{ paper.arxiv_id }}')"
                             {% if paper.translated_title_ja and paper.translated_summary_ja %}disabled{% endif %}>
                         {% if paper.translated_title_ja and paper.translated_summary_ja %}和訳表示中{% else %}和訳する{% endif %}
                     </button>
+
                     <!-- ★★★ AI質問ボタン ★★★ -->
-                    <button class="ask-ai-btn" 
+                    <button type="button"
+                            class="ask-ai-btn"
                             data-arxiv-id="{{ paper.arxiv_id }}"
-                            data-title="{{ paper.title }}"
+                            data-title="{{ paper.title|e }}"
                             onclick="openAskAiModal('{{ paper.arxiv_id }}', this)">
                         AIに質問
                     </button>
                 </div>
 
-                <div class="translation-area" id="translation-{{ paper.arxiv_id }}" style="display: {% if paper.translated_title_ja or paper.translated_summary_ja %}block{% else %}none{% endif %};">
+                <!-- ====== Translation Area ====== -->
+                <div class="translation-area" id="translation-{{ paper.arxiv_id }}"
+                     style="display: {% if paper.translated_title_ja or paper.translated_summary_ja %}block{% else %}none{% endif %};">
                     <h4>和訳:</h4>
                     <p><strong>タイトル:</strong> <span class="translated-title">{{ paper.translated_title_ja | default('', true) }}</span></p>
                     <div class="translated-summary-wrapper">
-                      <p><strong>概要:</strong></p>
-                      <div class="translated-summary">{{ paper.translated_summary_ja | default('', true) | replace('\n', '<br>') | safe }}</div>
+                        <p><strong>概要:</strong></p>
+                        <div class="translated-summary">{{ paper.translated_summary_ja | default('', true) | replace('\n', '<br>') | safe }}</div>
                     </div>
                 </div>
             </div>
@@ -152,16 +175,27 @@
 
             {% if total_pages > 1 %}
             <div class="pagination">
-                {% if current_page > 1 %}<a href="{{ url_for('index', category=selected_category, page=current_page-1) }}">« 前へ</a>
-                {% else %}<span class="disabled">« 前へ</span>{% endif %}
+                {% if current_page > 1 %}
+                    <a href="{{ url_for('index', category=selected_category, page=current_page-1) }}">« 前へ</a>
+                {% else %}
+                    <span class="disabled">« 前へ</span>
+                {% endif %}
+
                 {% for page_num in range(1, total_pages + 1) %}
-                    {% if page_num == current_page %}<span class="current-page">{{ page_num }}</span>
+                    {% if page_num == current_page %}
+                        <span class="current-page">{{ page_num }}</span>
                     {% elif page_num - current_page < 3 and current_page - page_num < 3 or page_num == 1 or page_num == total_pages %}
                         <a href="{{ url_for('index', category=selected_category, page=page_num) }}">{{ page_num }}</a>
-                    {% elif page_num - current_page == 3 or current_page - page_num == 3 %}<span>...</span>{% endif %}
+                    {% elif page_num - current_page == 3 or current_page - page_num == 3 %}
+                        <span>...</span>
+                    {% endif %}
                 {% endfor %}
-                {% if current_page < total_pages %}<a href="{{ url_for('index', category=selected_category, page=current_page+1) }}">次へ »</a>
-                {% else %}<span class="disabled">次へ »</span>{% endif %}
+
+                {% if current_page < total_pages %}
+                    <a href="{{ url_for('index', category=selected_category, page=current_page+1) }}">次へ »</a>
+                {% else %}
+                    <span class="disabled">次へ »</span>
+                {% endif %}
             </div>
             {% endif %}
         {% elif not error_message %}
@@ -169,7 +203,7 @@
         {% endif %}
     </div>
 
-    <!-- ★★★ AI質問モーダル ★★★ -->
+    <!-- ====== AI質問モーダル ====== -->
     <div id="askAiModal" class="modal">
         <div class="modal-content">
             <span class="close-button" onclick="closeAskAiModal()">×</span>
@@ -179,89 +213,115 @@
             <button id="askAiSubmitButton" onclick="submitAskAiQuestion()">質問を送信</button>
             <div id="askAiLoading" style="display:none; text-align:center; margin-top:10px;">
                 <p>AIが回答を生成中です...</p>
-                <!-- ローディングスピナーの例 (簡易) -->
                 <div class="spinner" style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 10px auto;"></div>
-                <style> @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } } </style>
+                <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
             </div>
-            <div id="askAiResponseArea">
-                <!-- AIの回答はここに表示 -->
-            </div>
+            <div id="askAiResponseArea"></div>
         </div>
     </div>
 
-
+    <!-- ====== JavaScript ====== -->
     <script>
-    function toggleSummary(summaryId, button) { /* ... (既存のまま) ... */ }
-    async function toggleFavorite(button) { /* ... (既存のまま) ... */ }
-    async function requestTranslation(button, arxivId) { /* ... (既存のまま) ... */ }
-
-    // ★★★ AI質問モーダル用JavaScript ★★★
-    let currentArxivIdForAskAi = null;
-
-    function openAskAiModal(arxivId, buttonElement) {
-        const paperTitle = buttonElement.dataset.title;
-        currentArxivIdForAskAi = arxivId;
-        document.getElementById('askAiModalPaperTitle').textContent = paperTitle;
-        document.getElementById('askAiQuestionText').value = '';
-        document.getElementById('askAiResponseArea').innerHTML = '';
-        document.getElementById('askAiLoading').style.display = 'none';
-        document.getElementById('askAiSubmitButton').disabled = false;
-        document.getElementById('askAiModal').style.display = 'block';
-        document.getElementById('askAiQuestionText').focus();
-    }
-
-    function closeAskAiModal() {
-        document.getElementById('askAiModal').style.display = 'none';
-        currentArxivIdForAskAi = null;
-    }
-
-    window.onclick = function(event) {
-        const modal = document.getElementById('askAiModal');
-        if (event.target == modal) {
-            closeAskAiModal();
+        /* ---------- サマリー開閉 ---------- */
+        function toggleSummary(id, btn) {
+            const elm = document.getElementById(id);
+            const expanded = elm.classList.toggle('expanded');
+            btn.textContent = expanded ? '閉じる' : '続きを読む';
         }
-    }
 
-    async function submitAskAiQuestion() {
-        if (!currentArxivIdForAskAi) return;
-        const questionText = document.getElementById('askAiQuestionText').value.trim();
-        if (!questionText) { alert('質問を入力してください。'); return; }
+        /* ---------- お気に入り ---------- */
+        async function toggleFavorite(btn) {
+            const payload = {
+                arxiv_id:   btn.dataset.arxivId,
+                title:      btn.dataset.title,
+                link_arxiv: btn.dataset.linkArxiv
+            };
+            try {
+                const res = await fetch("{{ url_for('favorite_toggle_route') }}", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) throw new Error('Network response was not ok');
+                const { status } = await res.json();
 
-        const submitButton = document.getElementById('askAiSubmitButton');
-        const responseArea = document.getElementById('askAiResponseArea');
-        const loadingIndicator = document.getElementById('askAiLoading');
-
-        submitButton.disabled = true;
-        responseArea.innerHTML = '';
-        loadingIndicator.style.display = 'block';
-
-        try {
-            const response = await fetch("{{ url_for('ask_ai_route') }}", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ arxiv_id: currentArxivIdForAskAi, question: questionText }),
-            });
-            loadingIndicator.style.display = 'none';
-            submitButton.disabled = false;
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ message: `サーバーエラー (${response.status})。詳細はサーバーログを確認してください。` }));
-                responseArea.innerHTML = `<p style="color:red;">エラー: ${errorData.message || '回答の取得に失敗しました。'}</p>`;
-                return;
+                const isAdded = status === 'added';
+                btn.classList.toggle('favorited', isAdded);
+                btn.textContent = isAdded ? '★ 解除' : '☆ お気に入り';
+            } catch (e) {
+                console.error(e);
+                alert('お気に入りの更新に失敗しました。');
             }
-            const result = await response.json();
-            if (result.success) {
-                responseArea.innerHTML = result.answer.replace(/\n/g, '<br>');
-            } else {
-                responseArea.innerHTML = `<p style="color:red;">エラー: ${result.message || '回答の取得に失敗しました。'}</p>`;
-            }
-        } catch (error) {
-            console.error('Ask AI request error:', error);
-            loadingIndicator.style.display = 'none';
-            submitButton.disabled = false;
-            responseArea.innerHTML = `<p style="color:red;">通信エラーが発生しました。ネットワーク接続を確認し、再度お試しください。</p>`;
         }
-    }
+
+        /* ---------- 翻訳 ---------- */
+        async function requestTranslation(btn, arxivId) {
+            btn.disabled = true;
+            try {
+                const res = await fetch("{{ url_for('translate_article_route') }}", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ arxiv_id: arxivId })
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                await res.json();   // 成功レスポンスの内容を使うならここで取得
+                location.reload();  // シンプルにページ再読込
+            } catch (e) {
+                console.error(e);
+                alert('翻訳に失敗しました。');
+                btn.disabled = false;
+            }
+        }
+
+        /* ---------- AI 質問モーダル ---------- */
+        let currentArxivIdForAskAi = null;
+
+        function openAskAiModal(arxivId, btnElm) {
+            currentArxivIdForAskAi = arxivId;
+            document.getElementById('askAiModalPaperTitle').textContent = btnElm.dataset.title;
+            document.getElementById('askAiQuestionText').value = '';
+            document.getElementById('askAiResponseArea').innerHTML = '';
+            document.getElementById('askAiLoading').style.display = 'none';
+            document.getElementById('askAiSubmitButton').disabled = false;
+            document.getElementById('askAiModal').style.display = 'block';
+            document.getElementById('askAiQuestionText').focus();
+        }
+
+        function closeAskAiModal() {
+            document.getElementById('askAiModal').style.display = 'none';
+            currentArxivIdForAskAi = null;
+        }
+
+        window.onclick = function(ev) {
+            if (ev.target === document.getElementById('askAiModal')) closeAskAiModal();
+        }
+
+        async function submitAskAiQuestion() {
+            if (!currentArxivIdForAskAi) return;
+            const q = document.getElementById('askAiQuestionText').value.trim();
+            if (!q) { alert('質問を入力してください。'); return; }
+
+            const btn = document.getElementById('askAiSubmitButton');
+            const area = document.getElementById('askAiResponseArea');
+            const loading = document.getElementById('askAiLoading');
+            btn.disabled = true; loading.style.display = 'block'; area.innerHTML = '';
+
+            try {
+                const res = await fetch("{{ url_for('ask_ai_route') }}", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ arxiv_id: currentArxivIdForAskAi, question: q })
+                });
+                const data = await res.json();
+                loading.style.display = 'none'; btn.disabled = false;
+                if (!data.success) throw new Error(data.message || 'Error');
+                area.innerHTML = data.answer.replace(/\n/g, '<br>');
+            } catch (e) {
+                console.error(e);
+                loading.style.display = 'none'; btn.disabled = false;
+                area.innerHTML = `<p style="color:red;">${e.message || '通信エラーが発生しました。'}</p>`;
+            }
+        }
     </script>
 </body>
 </html>
