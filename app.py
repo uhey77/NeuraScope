@@ -126,7 +126,7 @@ def api_ask():
 
     import openai
     answer_md=openai.chat.completions.create(
-        model=os.getenv("OPENAI_MODEL_NAME","gpt-4o-mini"),
+        model=os.getenv("OPENAI_MODEL_NAME","gpt-4.1-mini"),
         messages=[
             {"role":"system","content":"日本語で Markdown 形式で回答してください"},
             {"role":"user","content":f"{paper['title_ja']}\n\n{paper['analysis_ja']}\n\n【質問】{q}"}
