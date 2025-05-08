@@ -1,327 +1,105 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Research Navigator - arXiv</title>
+<meta charset="utf-8">
+<title>NeuraScope – 日本語論文リーダー</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/modern-css-reset/dist/reset.min.css">
 
-    <!-- ====== CSS ====== -->
-    <style>
-        /* …… ここは元のスタイルをそのまま貼り付け …… */
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; background-color: #eef2f5; color: #333; line-height: 1.6; }
-        .navbar { background-color: #343a40; padding: 1rem 2rem; color: white; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
-        .navbar h1 { margin: 0; font-size: 1.8em; }
-        .navbar h1 a { color: white; text-decoration: none;}
-        .nav-links a { color: white; text-decoration: none; margin-left: 20px; font-size: 1.1em; }
-        .nav-links a:hover { text-decoration: underline; }
-        .container { max-width: 960px; margin: auto; padding: 0 20px 20px 20px; }
-        .category-selector { background-color: #fff; padding: 15px; border-radius: 8px; margin-bottom: 25px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
-        .category-selector label { font-weight: bold; }
-        .category-selector select, .category-selector button { padding: 10px 15px; border-radius: 5px; border: 1px solid #ced4da; font-size: 1em; }
-        .category-selector button { background-color: #007bff; color: white; cursor: pointer; border-color: #007bff; }
-        .category-selector button:hover { background-color: #0056b3; }
-        .paper { background-color: #fff; border: 1px solid #dee2e6; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: box-shadow 0.3s ease; position: relative; }
-        .paper:hover { box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        .paper h2 { margin-top: 0; font-size: 1.3em; color: #0056b3; margin-bottom: 8px; }
-        .paper h2 a { text-decoration: none; color: inherit; }
-        .paper h2 a:hover { text-decoration: underline; }
-        .paper .meta-info { font-size: 0.85em; color: #6c757d; margin-bottom: 12px; }
-        .paper .meta-info span { margin-right: 15px; display: inline-block; margin-bottom: 3px;}
-        .paper .summary { font-size: 0.95em; line-height: 1.7; color: #495057; border-left: 3px solid #17a2b8; padding-left: 15px; margin-top: 10px; margin-bottom: 15px; }
-        .summary-content { max-height: 7.5em; overflow: hidden; position: relative; transition: max-height 0.4s ease-in-out; }
-        .summary-content.expanded { max-height: 1000px; }
-        .read-more { color: #007bff; cursor: pointer; font-weight: bold; display: inline-block; margin-top: 8px; font-size: 0.9em; }
-        .read-more:hover { text-decoration: underline; }
-        .paper .links { margin-top:15px; font-size: 0.9em; }
-        .paper .links a { margin-right: 15px; text-decoration: none; color: #007bff; font-weight: bold; }
-        .paper .links a:hover { text-decoration: underline; }
-        .error { color: #dc3545; background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 15px; border-radius: 5px; text-align: center; margin-bottom: 20px; }
-        .action-buttons { margin-top: 10px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;}
-        .favorite-btn, .translate-btn, .ask-ai-btn { padding: 6px 12px; cursor: pointer; border-radius: 4px; font-size: 0.85em; border: 1px solid; transition: background-color 0.2s ease, color 0.2s ease; }
-        .favorite-btn { border-color: #ffc107; background-color: transparent; color: #ffc107; }
-        .favorite-btn.favorited { background-color: #ffc107; color: #fff; }
-        .translate-btn { border-color: #28a745; background-color: transparent; color: #28a745; }
-        .translate-btn:disabled, .ask-ai-btn:disabled { background-color: #e9ecef; color: #6c757d; border-color: #ced4da; cursor: not-allowed;}
-        .ask-ai-btn { border-color: #6f42c1; background-color: transparent; color: #6f42c1; } /* AI質問ボタン */
-        .translation-area { margin-top:15px; padding:15px; background-color:#f0f8ff; border: 1px solid #cfe2ff; border-radius:4px; font-size: 0.9em;}
-        .translation-area h4 { margin-top:0; margin-bottom: 10px; color: #004085; font-size: 1.1em;}
-        .translation-area p { margin-bottom: 8px; }
-        .translated-summary-wrapper { margin-top: 5px; }
-        .translated-summary { line-height: 1.6; }
-        .pagination { text-align: center; margin-top: 30px; margin-bottom: 20px; }
-        .pagination a, .pagination span { display: inline-block; padding: 8px 12px; margin: 0 3px; border: 1px solid #ddd; text-decoration: none; color: #007bff; border-radius: 4px; }
-        .pagination a:hover { background-color: #f0f0f0; }
-        .pagination .current-page { background-color: #007bff; color: white; border-color: #007bff; }
-        .pagination .disabled { color: #aaa; border-color: #eee; cursor: default; }
+<style>
+/* ── Layout ─────────────────────────────────────────────── */
+body{font-family:system-ui,sans-serif;margin:0}
+#toc{position:fixed;left:0;top:0;height:100vh;width:240px;padding:1rem;
+     background:#f4f4f4;border-right:1px solid #ddd;overflow-y:auto}
+#toc h2{font-size:1.1rem;margin:.25rem 0 .75rem}
+#toc ul{list-style:none;margin:0;padding:0}
+#toc li{margin:.25rem 0}
+#toc a{color:#0077cc;text-decoration:none;font-size:.9rem}
+#toc a:hover{text-decoration:underline}
 
-        /* モーダル共通スタイル */
-        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); padding-top: 60px; }
-        .modal-content { background-color: #fefefe; margin: 5% auto; padding: 25px; border: 1px solid #888; width: 80%; max-width: 700px; border-radius: 8px; position: relative; box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2),0 6px 20px 0 rgba(0,0,0,0.19); }
-        .close-button { color: #aaa; float: right; font-size: 28px; font-weight: bold; position: absolute; top: 10px; right: 20px; }
-        .close-button:hover, .close-button:focus { color: black; text-decoration: none; cursor: pointer; }
-        #askAiModalTitle { margin-top: 0; color: #333; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
-        #askAiModalPaperTitle { font-weight: normal; color: #555; }
-        #askAiQuestionText { width: calc(100% - 22px); height: 100px; padding: 10px; margin-top: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; resize: vertical; font-size: 1em; line-height: 1.5; }
-        #askAiSubmitButton { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 1em; }
-        #askAiSubmitButton:hover { background-color: #0056b3; }
-        #askAiSubmitButton:disabled { background-color: #ccc; cursor: not-allowed; }
-        #askAiResponseArea { margin-top: 15px; padding:10px; background-color:#f9f9f9; border:1px solid #eee; border-radius:4px; min-height: 50px; white-space: pre-wrap; font-size: 0.95em; line-height: 1.6; max-height: 300px; overflow-y: auto; }
-        #askAiLoading { display:none; text-align:center; margin-top:10px; }
-    </style>
+#content{margin-left:260px;padding:2rem}
+
+/* ── Paper Card ─────────────────────────────────────────── */
+.paper{margin-block:1.5rem;padding:1rem 1.25rem;border:1px solid #ddd;border-radius:.75rem;position:relative}
+button.fav{position:absolute;top:.75rem;right:.75rem;background:none;border:none;font-size:1.5rem;cursor:pointer}
+.paper h2{margin:0 0 .25rem}
+.analysis h3{margin-top:1rem}
+
+/* ── Q&A form ───────────────────────────────────────────── */
+textarea.ask{width:100%;height:4.5rem;padding:.5rem;margin-top:.5rem}
+button.ask{margin-top:.25rem;padding:.3rem .8rem}
+.answer{margin-top:.5rem;background:#f8f8f8;padding:.5rem .8rem;border-radius:.5rem}
+</style>
 </head>
-
 <body>
-    <!-- ====== Navbar ====== -->
-    <div class="navbar">
-        <h1><a href="{{ url_for('index') }}">AI Research Navigator</a></h1>
-        <div class="nav-links">
-            <a href="{{ url_for('index') }}">ホーム</a>
-            <a href="{{ url_for('favorites_page') }}">お気に入り</a>
-        </div>
-    </div>
 
-    <div class="container">
-        <!-- ====== Category Selector ====== -->
-        <div class="category-selector">
-            <form method="GET" action="{{ url_for('index') }}">
-                <label for="category">カテゴリ:</label>
-                <select name="category" id="category" onchange="this.form.submit()">
-                    {% for cat in categories %}
-                    <option value="{{ cat }}" {% if cat == selected_category %}selected{% endif %}>{{ cat }}</option>
-                    {% endfor %}
-                </select>
-            </form>
-        </div>
+<!-- ──────────────── TOC Sidebar ──────────────── -->
+<nav id="toc">
+  <h2>論文一覧</h2>
+  <ul id="toc-list"><!-- JS で挿入 --></ul>
+</nav>
 
-        {% if error_message %}
-            <p class="error">{{ error_message }}</p>
-        {% endif %}
+<!-- ──────────────── Main Content ─────────────── -->
+<div id="content">
+  <h1>最新論文（詳細サマリ展開版）</h1>
 
-        {% if papers %}
-            {% for paper in papers %}
-            <div class="paper" id="paper-{{ paper.arxiv_id }}">
-                <h2>
-                    <a href="{{ paper.link_arxiv }}" target="_blank" rel="noopener noreferrer">
-                        {% if paper.translated_title_ja %}
-                            {{ paper.translated_title_ja }} <span style="font-size:0.8em; color:#777;">(原文: {{ paper.title }})</span>
-                        {% else %}
-                            {{ paper.title }}
-                        {% endif %}
-                    </a>
-                </h2>
+  <nav>
+    <a href="{{ url_for('index') }}"     class="{{ 'active' if not only_fav else '' }}">すべて</a>
+    <a href="{{ url_for('favorites') }}" class="{{ 'active' if only_fav else '' }}">お気に入り</a>
+  </nav>
 
-                <div class="meta-info">
-                    <span><strong>Authors:</strong> {{ paper.authors if paper.authors else 'N/A' }}</span>
-                    <span><strong>Published:</strong> {{ paper.published_date_str if paper.published_date_str else 'N/A' }}</span>
-                    <span><strong>ID:</strong> {{ paper.arxiv_id }}</span>
-                </div>
+  {% for p in papers %}
+  <article class="paper" id="card-{{ p.id }}" data-id="{{ p.id }}">
+    <button class="fav">{{ "★" if p.favorite else "☆" }}</button>
 
-                {% if paper.summary %}
-                <div class="summary">
-                    <div class="summary-content" id="summary-{{ paper.arxiv_id }}">
-                        <p><strong>Summary (Original):</strong></p>
-                        {{ paper.summary | safe }}
-                    </div>
-                    <span class="read-more" onclick="toggleSummary('summary-{{ paper.arxiv_id }}', this)">続きを読む</span>
-                </div>
-                {% endif %}
+    <h2><a href="{{ url_for('paper_detail', paper_id=p.id) }}">{{ p.title_ja }}</a></h2>
+    <p><a href="{{ url_for('paper_detail', paper_id=p.id) }}">詳細ページへ</a>{% if p.pdf_url %} / <a href="{{ p.pdf_url }}" target="_blank" rel="noopener">PDF</a>{% endif %}</p>
 
-                <div class="links">
-                    <a href="{{ paper.link_arxiv }}" target="_blank" rel="noopener noreferrer">arXiv Page</a>
-                    {% if paper.link_pdf %}| <a href="{{ paper.link_pdf }}" target="_blank" rel="noopener noreferrer">PDF</a>{% endif %}
-                </div>
+    <section class="analysis">{{ p.analysis_html | safe }}</section>
 
-                <!-- ====== Action Buttons ====== -->
-                <div class="action-buttons">
-                    <button type="button"
-                            class="favorite-btn {% if paper.is_favorite %}favorited{% endif %}"
-                            data-arxiv-id="{{ paper.arxiv_id }}"
-                            data-title="{{ paper.title|e }}"
-                            data-link-arxiv="{{ paper.link_arxiv }}"
-                            onclick="toggleFavorite(this)">
-                        {% if paper.is_favorite %}★ 解除{% else %}☆ お気に入り{% endif %}
-                    </button>
+    <!-- Q&A -->
+    <textarea class="ask" placeholder="この論文について AI に質問…" id="q-{{ p.id }}"></textarea>
+    <button class="ask" onclick="ask({{ p.id }})">質問する</button>
+    <div class="answer" id="ans-{{ p.id }}"></div>
+  </article>
+  {% else %}
+  <p>データがありません。</p>
+  {% endfor %}
+</div>
 
-                    <button type="button"
-                            class="translate-btn"
-                            data-arxiv-id="{{ paper.arxiv_id }}"
-                            onclick="requestTranslation(this, '{{ paper.arxiv_id }}')"
-                            {% if paper.translated_title_ja and paper.translated_summary_ja %}disabled{% endif %}>
-                        {% if paper.translated_title_ja and paper.translated_summary_ja %}和訳表示中{% else %}和訳する{% endif %}
-                    </button>
+<!-- ──────────────── Scripts ──────────────────── -->
+<script>
+/* --- Favorite toggle ----------------------------------- */
+document.querySelectorAll("button.fav").forEach(btn=>{
+  btn.onclick=async e=>{
+    const art=e.target.closest("article"),id=art.dataset.id,will=btn.textContent==="☆";
+    const r=await fetch(`/api/favorite/${id}`,{method:"POST",headers:{"Content-Type":"application/json"},
+               body:JSON.stringify({favorite:will})});
+    if(r.ok)btn.textContent=will?"★":"☆";
+  };
+});
 
-                    <!-- ★★★ AI質問ボタン ★★★ -->
-                    <button type="button"
-                            class="ask-ai-btn"
-                            data-arxiv-id="{{ paper.arxiv_id }}"
-                            data-title="{{ paper.title|e }}"
-                            onclick="openAskAiModal('{{ paper.arxiv_id }}', this)">
-                        AIに質問
-                    </button>
-                </div>
+/* --- Q&A per card -------------------------------------- */
+async function ask(id){
+  const q=document.getElementById(`q-${id}`).value.trim();
+  const ansBox=document.getElementById(`ans-${id}`);
+  if(!q)return;
+  ansBox.textContent="Thinking…";
+  const res=await fetch("/api/ask",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({paper_id:id,question:q})});
+  const data=await res.json();
+  ansBox.textContent=data.answer||data.error;
+}
 
-                <!-- ====== Translation Area ====== -->
-                <div class="translation-area" id="translation-{{ paper.arxiv_id }}"
-                     style="display: {% if paper.translated_title_ja or paper.translated_summary_ja %}block{% else %}none{% endif %};">
-                    <h4>和訳:</h4>
-                    <p><strong>タイトル:</strong> <span class="translated-title">{{ paper.translated_title_ja | default('', true) }}</span></p>
-                    <div class="translated-summary-wrapper">
-                        <p><strong>概要:</strong></p>
-                        <div class="translated-summary">{{ paper.translated_summary_ja | default('', true) | replace('\n', '<br>') | safe }}</div>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-
-            {% if total_pages > 1 %}
-            <div class="pagination">
-                {% if current_page > 1 %}
-                    <a href="{{ url_for('index', category=selected_category, page=current_page-1) }}">« 前へ</a>
-                {% else %}
-                    <span class="disabled">« 前へ</span>
-                {% endif %}
-
-                {% for page_num in range(1, total_pages + 1) %}
-                    {% if page_num == current_page %}
-                        <span class="current-page">{{ page_num }}</span>
-                    {% elif page_num - current_page < 3 and current_page - page_num < 3 or page_num == 1 or page_num == total_pages %}
-                        <a href="{{ url_for('index', category=selected_category, page=page_num) }}">{{ page_num }}</a>
-                    {% elif page_num - current_page == 3 or current_page - page_num == 3 %}
-                        <span>...</span>
-                    {% endif %}
-                {% endfor %}
-
-                {% if current_page < total_pages %}
-                    <a href="{{ url_for('index', category=selected_category, page=current_page+1) }}">次へ »</a>
-                {% else %}
-                    <span class="disabled">次へ »</span>
-                {% endif %}
-            </div>
-            {% endif %}
-        {% elif not error_message %}
-            <p>このカテゴリの論文は現在登録されていません。しばらくしてから再読み込みしてください。</p>
-        {% endif %}
-    </div>
-
-    <!-- ====== AI質問モーダル ====== -->
-    <div id="askAiModal" class="modal">
-        <div class="modal-content">
-            <span class="close-button" onclick="closeAskAiModal()">×</span>
-            <h3 id="askAiModalTitle">論文についてAIに質問</h3>
-            <p><strong>対象論文:</strong> <span id="askAiModalPaperTitle"></span></p>
-            <textarea id="askAiQuestionText" placeholder="論文に関する質問をここに入力してください... (例: この論文の新規性はなんですか？)"></textarea>
-            <button id="askAiSubmitButton" onclick="submitAskAiQuestion()">質問を送信</button>
-            <div id="askAiLoading" style="display:none; text-align:center; margin-top:10px;">
-                <p>AIが回答を生成中です...</p>
-                <div class="spinner" style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 10px auto;"></div>
-                <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
-            </div>
-            <div id="askAiResponseArea"></div>
-        </div>
-    </div>
-
-    <!-- ====== JavaScript ====== -->
-    <script>
-        /* ---------- サマリー開閉 ---------- */
-        function toggleSummary(id, btn) {
-            const elm = document.getElementById(id);
-            const expanded = elm.classList.toggle('expanded');
-            btn.textContent = expanded ? '閉じる' : '続きを読む';
-        }
-
-        /* ---------- お気に入り ---------- */
-        async function toggleFavorite(btn) {
-            const payload = {
-                arxiv_id:   btn.dataset.arxivId,
-                title:      btn.dataset.title,
-                link_arxiv: btn.dataset.linkArxiv
-            };
-            try {
-                const res = await fetch("{{ url_for('favorite_toggle_route') }}", {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                if (!res.ok) throw new Error('Network response was not ok');
-                const { status } = await res.json();
-
-                const isAdded = status === 'added';
-                btn.classList.toggle('favorited', isAdded);
-                btn.textContent = isAdded ? '★ 解除' : '☆ お気に入り';
-            } catch (e) {
-                console.error(e);
-                alert('お気に入りの更新に失敗しました。');
-            }
-        }
-
-        /* ---------- 翻訳 ---------- */
-        async function requestTranslation(btn, arxivId) {
-            btn.disabled = true;
-            try {
-                const res = await fetch("{{ url_for('translate_article_route') }}", {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ arxiv_id: arxivId })
-                });
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                await res.json();   // 成功レスポンスの内容を使うならここで取得
-                location.reload();  // シンプルにページ再読込
-            } catch (e) {
-                console.error(e);
-                alert('翻訳に失敗しました。');
-                btn.disabled = false;
-            }
-        }
-
-        /* ---------- AI 質問モーダル ---------- */
-        let currentArxivIdForAskAi = null;
-
-        function openAskAiModal(arxivId, btnElm) {
-            currentArxivIdForAskAi = arxivId;
-            document.getElementById('askAiModalPaperTitle').textContent = btnElm.dataset.title;
-            document.getElementById('askAiQuestionText').value = '';
-            document.getElementById('askAiResponseArea').innerHTML = '';
-            document.getElementById('askAiLoading').style.display = 'none';
-            document.getElementById('askAiSubmitButton').disabled = false;
-            document.getElementById('askAiModal').style.display = 'block';
-            document.getElementById('askAiQuestionText').focus();
-        }
-
-        function closeAskAiModal() {
-            document.getElementById('askAiModal').style.display = 'none';
-            currentArxivIdForAskAi = null;
-        }
-
-        window.onclick = function(ev) {
-            if (ev.target === document.getElementById('askAiModal')) closeAskAiModal();
-        }
-
-        async function submitAskAiQuestion() {
-            if (!currentArxivIdForAskAi) return;
-            const q = document.getElementById('askAiQuestionText').value.trim();
-            if (!q) { alert('質問を入力してください。'); return; }
-
-            const btn = document.getElementById('askAiSubmitButton');
-            const area = document.getElementById('askAiResponseArea');
-            const loading = document.getElementById('askAiLoading');
-            btn.disabled = true; loading.style.display = 'block'; area.innerHTML = '';
-
-            try {
-                const res = await fetch("{{ url_for('ask_ai_route') }}", {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ arxiv_id: currentArxivIdForAskAi, question: q })
-                });
-                const data = await res.json();
-                loading.style.display = 'none'; btn.disabled = false;
-                if (!data.success) throw new Error(data.message || 'Error');
-                area.innerHTML = data.answer.replace(/\n/g, '<br>');
-            } catch (e) {
-                console.error(e);
-                loading.style.display = 'none'; btn.disabled = false;
-                area.innerHTML = `<p style="color:red;">${e.message || '通信エラーが発生しました。'}</p>`;
-            }
-        }
-    </script>
-</body>
-</html>
+/* --- Build sidebar TOC --------------------------------- */
+(function(){
+  const list=document.getElementById("toc-list");
+  document.querySelectorAll(".paper").forEach(card=>{
+    const li=document.createElement("li");
+    const a=document.createElement("a");
+    a.href="#"+card.id;
+    a.textContent=card.querySelector("h2").textContent;
+    li.appendChild(a); list.appendChild(li);
+  });
+})();
+</script>
+</body></html>
