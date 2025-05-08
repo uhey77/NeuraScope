@@ -4,43 +4,33 @@
 <meta charset="utf-8">
 <title>NeuraScope – 日本語論文リーダー</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/modern-css-reset/dist/reset.min.css">
-
 <style>
-/* ── Layout ─────────────────────────────────────────────── */
-body{font-family:system-ui,sans-serif;margin:0}
-#toc{position:fixed;left:0;top:0;height:100vh;width:240px;padding:1rem;
-     background:#f4f4f4;border-right:1px solid #ddd;overflow-y:auto}
-#toc h2{font-size:1.1rem;margin:.25rem 0 .75rem}
-#toc ul{list-style:none;margin:0;padding:0}
-#toc li{margin:.25rem 0}
-#toc a{color:#0077cc;text-decoration:none;font-size:.9rem}
-#toc a:hover{text-decoration:underline}
+ /* layout -------------------------------------------------- */
+ body{font-family:system-ui,sans-serif;margin:0}
+ #toc{position:fixed;left:0;top:0;height:100vh;width:240px;padding:1rem;
+      background:#f4f4f4;border-right:1px solid #ddd;overflow-y:auto}
+ #content{margin-left:260px;padding:2rem}
+ #toc h2{font-size:1.1rem;margin:.25rem 0 .75rem}
+ #toc ul{list-style:none;margin:0;padding:0;font-size:.9rem}
+ #toc li{margin:.25rem 0}
 
-#content{margin-left:260px;padding:2rem}
-
-/* ── Paper Card ─────────────────────────────────────────── */
-.paper{margin-block:1.5rem;padding:1rem 1.25rem;border:1px solid #ddd;border-radius:.75rem;position:relative}
-button.fav{position:absolute;top:.75rem;right:.75rem;background:none;border:none;font-size:1.5rem;cursor:pointer}
-.paper h2{margin:0 0 .25rem}
-.analysis h3{margin-top:1rem}
-
-/* ── Q&A form ───────────────────────────────────────────── */
-textarea.ask{width:100%;height:4.5rem;padding:.5rem;margin-top:.5rem}
-button.ask{margin-top:.25rem;padding:.3rem .8rem}
-.answer{margin-top:.5rem;background:#f8f8f8;padding:.5rem .8rem;border-radius:.5rem}
+ /* paper card --------------------------------------------- */
+ .paper{margin-block:1.5rem;padding:1rem;border:1px solid #ddd;border-radius:.75rem;position:relative}
+ button.fav{position:absolute;top:.7rem;right:.7rem;background:none;border:none;font-size:1.5rem;cursor:pointer}
+ .analysis h3{margin-top:1rem}
 </style>
 </head>
 <body>
 
-<!-- ──────────────── TOC Sidebar ──────────────── -->
+<!-- ---------- 左サイドバー（目次） ---------- -->
 <nav id="toc">
   <h2>論文一覧</h2>
   <ul id="toc-list"><!-- JS で挿入 --></ul>
 </nav>
 
-<!-- ──────────────── Main Content ─────────────── -->
+<!-- ---------- メインコンテンツ ---------- -->
 <div id="content">
-  <h1>最新論文（詳細サマリ展開版）</h1>
+  <h1>最新論文</h1>
 
   <nav>
     <a href="{{ url_for('index') }}"     class="{{ 'active' if not only_fav else '' }}">すべて</a>
@@ -49,53 +39,37 @@ button.ask{margin-top:.25rem;padding:.3rem .8rem}
 
   {% for p in papers %}
   <article class="paper" id="card-{{ p.id }}" data-id="{{ p.id }}">
-    <button class="fav">{{ "★" if p.favorite else "☆" }}</button>
+    <button class="fav">{{ '★' if p.favorite else '☆' }}</button>
 
     <h2><a href="{{ url_for('paper_detail', paper_id=p.id) }}">{{ p.title_ja }}</a></h2>
-    <p><a href="{{ url_for('paper_detail', paper_id=p.id) }}">詳細ページへ</a>{% if p.pdf_url %} / <a href="{{ p.pdf_url }}" target="_blank" rel="noopener">PDF</a>{% endif %}</p>
+    <p>
+      <a href="{{ url_for('paper_detail', paper_id=p.id) }}">詳細ページへ</a>
+      {% if p.pdf_url %}/ <a href="{{ p.pdf_url }}" target="_blank" rel="noopener">PDF</a>{% endif %}
+    </p>
 
     <section class="analysis">{{ p.analysis_html | safe }}</section>
-
-    <!-- Q&A -->
-    <textarea class="ask" placeholder="この論文について AI に質問…" id="q-{{ p.id }}"></textarea>
-    <button class="ask" onclick="ask({{ p.id }})">質問する</button>
-    <div class="answer" id="ans-{{ p.id }}"></div>
   </article>
-  {% else %}
-  <p>データがありません。</p>
   {% endfor %}
 </div>
 
-<!-- ──────────────── Scripts ──────────────────── -->
+<!-- ---------- スクリプト ---------- -->
 <script>
-/* --- Favorite toggle ----------------------------------- */
+/* お気に入りトグル ------------------------------------ */
 document.querySelectorAll("button.fav").forEach(btn=>{
-  btn.onclick=async e=>{
-    const art=e.target.closest("article"),id=art.dataset.id,will=btn.textContent==="☆";
-    const r=await fetch(`/api/favorite/${id}`,{method:"POST",headers:{"Content-Type":"application/json"},
-               body:JSON.stringify({favorite:will})});
+  btn.onclick=async ()=>{
+    const id=btn.closest("article").dataset.id,will=btn.textContent==="☆";
+    const r=await fetch(`/api/favorite/${id}`,{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({favorite:will})
+    });
     if(r.ok)btn.textContent=will?"★":"☆";
   };
 });
 
-/* --- Q&A per card -------------------------------------- */
-async function ask(id){
-  const q=document.getElementById(`q-${id}`).value.trim();
-  const ansBox=document.getElementById(`ans-${id}`);
-  if(!q)return;
-  ansBox.textContent="Thinking…";
-  const res=await fetch("/api/ask",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({paper_id:id,question:q})});
-  const data=await res.json();
-  ansBox.textContent=data.answer||data.error;
-}
-
-/* --- Build sidebar TOC --------------------------------- */
-(function(){
-  const list=document.getElementById("toc-list");
+/* 目次自動生成 ---------------------------------------- */
+(()=>{const list=document.getElementById("toc-list");
   document.querySelectorAll(".paper").forEach(card=>{
-    const li=document.createElement("li");
-    const a=document.createElement("a");
+    const li=document.createElement("li"),a=document.createElement("a");
     a.href="#"+card.id;
     a.textContent=card.querySelector("h2").textContent;
     li.appendChild(a); list.appendChild(li);
