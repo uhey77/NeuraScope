@@ -2,78 +2,123 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>NeuraScope – 日本語論文リーダー</title>
+<title>NeuraScope</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/modern-css-reset/dist/reset.min.css">
 <style>
- /* layout -------------------------------------------------- */
- body{font-family:system-ui,sans-serif;margin:0}
- #toc{position:fixed;left:0;top:0;height:100vh;width:240px;padding:1rem;
-      background:#f4f4f4;border-right:1px solid #ddd;overflow-y:auto}
- #content{margin-left:260px;padding:2rem}
- #toc h2{font-size:1.1rem;margin:.25rem 0 .75rem}
- #toc ul{list-style:none;margin:0;padding:0;font-size:.9rem}
- #toc li{margin:.25rem 0}
-
- /* paper card --------------------------------------------- */
- .paper{margin-block:1.5rem;padding:1rem;border:1px solid #ddd;border-radius:.75rem;position:relative}
- button.fav{position:absolute;top:.7rem;right:.7rem;background:none;border:none;font-size:1.5rem;cursor:pointer}
- .analysis h3{margin-top:1rem}
+body{font-family:system-ui,sans-serif;margin:0;padding:0 0 2rem}
+header{background:#0077cc;color:#fff;padding:.6rem 1rem;font-size:1.3rem;font-weight:bold}
+.wrapper{padding:1.2rem}
+.tabbar{display:flex;gap:.6rem;margin-bottom:1rem}
+.tabbar button{padding:.4rem 1rem;border:1px solid #0077cc;background:#fff;color:#0077cc}
+.tabbar button.active{background:#0077cc;color:#fff}
+.card{border:1px solid #ddd;border-radius:.75rem;padding:1rem;margin-block:1rem;position:relative}
+.fav{position:absolute;top:.4rem;right:.5rem;border:none;background:none;font-size:1.4rem;cursor:pointer}
+select{margin-bottom:.8rem}
+.toc{margin:.5rem 0}
 </style>
 </head>
 <body>
 
-<!-- ---------- 左サイドバー（目次） ---------- -->
-<nav id="toc">
-  <h2>論文一覧</h2>
-  <ul id="toc-list"><!-- JS で挿入 --></ul>
+<header>NeuraScope</header>
+<div class="wrapper">
+
+<nav class="tabbar">
+  <button data-tab="arxiv" class="active">arXiv</button>
+  <button data-tab="paper">論文フィード</button>
+  <button data-tab="news">ニュース</button>
+  <button data-tab="blog">技術ブログ</button>
+  <button onclick="location.href='/favorites'">★ お気に入り</button>
 </nav>
 
-<!-- ---------- メインコンテンツ ---------- -->
-<div id="content">
-  <h1>最新論文</h1>
-
-  <nav>
-    <a href="{{ url_for('index') }}"     class="{{ 'active' if not only_fav else '' }}">すべて</a>
-    <a href="{{ url_for('favorites') }}" class="{{ 'active' if only_fav else '' }}">お気に入り</a>
-  </nav>
-
-  {% for p in papers %}
-  <article class="paper" id="card-{{ p.id }}" data-id="{{ p.id }}">
-    <button class="fav">{{ '★' if p.favorite else '☆' }}</button>
-
-    <h2><a href="{{ url_for('paper_detail', paper_id=p.id) }}">{{ p.title_ja }}</a></h2>
-    <p>
-      <a href="{{ url_for('paper_detail', paper_id=p.id) }}">詳細ページへ</a>
-      {% if p.pdf_url %}/ <a href="{{ p.pdf_url }}" target="_blank" rel="noopener">PDF</a>{% endif %}
-    </p>
-
-    <section class="analysis">{{ p.analysis_html | safe }}</section>
-  </article>
-  {% endfor %}
+<div class="toc">
+  <label>目次:
+    <select id="toc-select"></select>
+  </label>
 </div>
 
-<!-- ---------- スクリプト ---------- -->
+<!-- arXiv -->
+<section id="tab-arxiv">
+  {% for d,plist in arxiv_days.items() %}
+    <div class="grp" id="arxiv-{{d}}" {% if not loop.first %}style="display:none"{% endif %}>
+      {% for p in plist %}
+      <article class="card">
+        <button class="fav" data-kind="paper" data-id="{{p.id}}">{{ '★' if p.favorite else '☆' }}</button>
+        <h3><a href="{{ url_for('paper_detail', paper_id=p.id) }}">{{ p.title_ja }}</a></h3>
+        {{ p.analysis_html|safe }}
+      </article>
+      {% endfor %}
+    </div>
+  {% endfor %}
+</section>
+
+<!-- 外部フィード -->
+{% for cat in ['paper','news','blog'] %}
+<section id="tab-{{cat}}" style="display:none">
+  {% for d,alist in ext_by_cat[cat].items() %}
+    <div class="grp-{{cat}}" id="{{cat}}-{{d}}" {% if not loop.first %}style="display:none"{% endif %}>
+      {% for a in alist %}
+      <article class="card">
+        <button class="fav" data-kind="article" data-id="{{a.id}}">{{ '★' if a.favorite else '☆' }}</button>
+        <h4><a href="{{ a.link }}" target="_blank">{{ a.title_ja or a.title_en }}</a></h4>
+        {% if a.summary_ja or a.summary_en %}
+          <p>{{ a.summary_ja or a.summary_en }}</p>
+        {% endif %}
+      </article>
+      {% endfor %}
+    </div>
+  {% endfor %}
+</section>
+{% endfor %}
+</div><!-- /.wrapper -->
+
 <script>
-/* お気に入りトグル ------------------------------------ */
-document.querySelectorAll("button.fav").forEach(btn=>{
-  btn.onclick=async ()=>{
-    const id=btn.closest("article").dataset.id,will=btn.textContent==="☆";
-    const r=await fetch(`/api/favorite/${id}`,{
-      method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({favorite:will})
+/* タブ切替 */
+const tabs=document.querySelectorAll(".tabbar button[data-tab]");
+tabs.forEach(btn=>{
+  btn.onclick=()=>{
+    tabs.forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    const id="tab-"+btn.dataset.tab;
+    document.querySelectorAll("section[id^='tab-']").forEach(sec=>{
+      sec.style.display=sec.id===id?"":"none";
     });
-    if(r.ok)btn.textContent=will?"★":"☆";
+    populateToc(btn.dataset.tab);
   };
 });
 
-/* 目次自動生成 ---------------------------------------- */
-(()=>{const list=document.getElementById("toc-list");
-  document.querySelectorAll(".paper").forEach(card=>{
-    const li=document.createElement("li"),a=document.createElement("a");
-    a.href="#"+card.id;
-    a.textContent=card.querySelector("h2").textContent;
-    li.appendChild(a); list.appendChild(li);
+/* 目次生成 */
+function populateToc(cat){
+  const sel=document.getElementById("toc-select");
+  sel.innerHTML="";
+  const selector=cat==="arxiv"?".grp":".grp-"+cat;
+  document.querySelectorAll(selector).forEach(div=>{
+    const d=div.id.split("-").pop();
+    sel.insertAdjacentHTML("beforeend",`<option value="${div.id}">${d}</option>`);
   });
-})();
+  sel.onchange=e=>{
+    const id=e.target.value;
+    document.querySelectorAll(selector).forEach(div=>{
+      div.style.display=div.id===id?"":"none";
+    });
+  };
+  sel.dispatchEvent(new Event("change"));
+}
+populateToc("arxiv");
+
+/* お気に入りトグル */
+function toggleFav(btn){
+  fetch(`/api/favorite/${btn.dataset.kind}/${btn.dataset.id}`,{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({favorite:btn.textContent==="☆"})
+  }).then(r=>r.json()).then(j=>{
+    if(j.ok) btn.textContent=j.favorite?"★":"☆";
+  });
+}
+document.addEventListener("click",e=>{
+  if(e.target.classList.contains("fav")) toggleFav(e.target);
+});
 </script>
-</body></html>
+
+</body>
+</html>

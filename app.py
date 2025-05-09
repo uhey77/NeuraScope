@@ -1,153 +1,376 @@
 from __future__ import annotations
-import os, sqlite3, arxiv, markdown
+import os, sqlite3, arxiv, markdown, feedparser, requests, backoff
 from contextlib import closing
 from datetime import datetime, timezone
+from bs4 import BeautifulSoup
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 
+from feeds import FEEDS
 from translate_util import translate_text_openai
 from analysis_util  import generate_analysis
 
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-DB_PATH  = os.path.join(BASE_DIR, "neurascope.db")
+DB_PATH = "neurascope.db"
+UA      = {"User-Agent": "Mozilla/5.0 (NeuraScope)"}
 
 app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
 
-# ── DB helpers ---------------------------------------------------------
-def get_db() -> sqlite3.Connection:
-    c = sqlite3.connect(DB_PATH); c.row_factory = sqlite3.Row; return c
+# ───────────────────────── DB
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
-def init_db() -> None:
-    with closing(get_db()) as conn, open(os.path.join(BASE_DIR,"schema.sql"),encoding="utf-8") as f:
-        conn.executescript(f.read()); conn.commit()
+def init_db():
+    with closing(get_db()) as conn, open("schema.sql", encoding="utf-8") as f:
+        conn.executescript(f.read())
+        conn.commit()
 
-# ── Scheduled fetch job -----------------------------------------------
-ARXIV_QUERY = "cat:cs.AI OR cat:cs.LG"; MAX = 20
-def scheduled_fetch_job() -> None:
-    print("[fetch] start")
+# ───────────────────────── arXiv 取得
+def fetch_arxiv():
+    print("[arxiv] start")
     with closing(get_db()) as conn:
         cur = conn.cursor()
-        for r in arxiv.Search(query=ARXIV_QUERY,
-                              sort_by=arxiv.SortCriterion.SubmittedDate,
-                              max_results=MAX).results():     # type: ignore[attr-defined]
+        search = arxiv.Search(
+            "cat:cs.AI OR cat:cs.LG",
+            sort_by=arxiv.SortCriterion.SubmittedDate,
+            max_results=20,
+        )
+        for r in search.results():                                     # type:ignore[attr-defined]
             aid = r.get_short_id()
             if cur.execute("SELECT 1 FROM papers WHERE arxiv_id=?", (aid,)).fetchone():
                 continue
-            # meta
-            title_en  = r.title.strip()
+            title_en = r.title.strip()
             abstract_en = r.summary.strip()
-            pdf_url   = next((l.href for l in r.links if l.title=="pdf"),None)
-            authors   = ", ".join(a.name for a in r.authors)
-            categories= " ".join(r.categories)
-            comment   = (r.comment or "").strip()
-            pub_at    = r.published.isoformat(timespec="seconds")
-
-            # translation & analysis
-            title_ja  = translate_text_openai(title_en)
+            title_ja = translate_text_openai(title_en)
             abstract_ja = translate_text_openai(abstract_en)
             analysis_ja, tweet_ja = generate_analysis(title_ja, abstract_ja)
-
             now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-            cur.execute("""
-              INSERT INTO papers
-                (arxiv_id,title_en,title_ja,abstract_en,abstract_ja,
-                 authors,categories,comment,published_at,
-                 analysis_ja,tweet_ja,pdf_url,
-                 created_at,translated_at)
-              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """, (aid,title_en,title_ja,abstract_en,abstract_ja,
-                  authors,categories,comment,pub_at,
-                  analysis_ja,tweet_ja,pdf_url,
-                  now,now))
+            cur.execute(
+                """INSERT INTO papers
+                  (arxiv_id,title_en,title_ja,abstract_en,abstract_ja,
+                   authors,categories,comment,published_at,
+                   analysis_ja,tweet_ja,pdf_url,
+                   favorite,created_at,translated_at)
+                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    aid,
+                    title_en,
+                    title_ja,
+                    abstract_en,
+                    abstract_ja,
+                    ", ".join(a.name for a in r.authors),
+                    " ".join(r.categories),
+                    (r.comment or "").strip(),
+                    r.published.isoformat(timespec="seconds"),
+                    analysis_ja,
+                    tweet_ja,
+                    next((l.href for l in r.links if l.title == "pdf"), None),
+                    0,
+                    now,
+                    now,
+                ),
+            )
         conn.commit()
-    print("[fetch] end")
+    print("[arxiv] end")
 
-# ── Markdown ext -------------------------------------------------------
-MD_EXT = ["fenced_code","tables","toc"]
+# ───────────────────────── 外部フィード取得
+def fetch_feeds():
+    print("[feeds] start")
+    with closing(get_db()) as conn:
+        cur = conn.cursor()
+        for sid, meta in FEEDS.items():
+            print("  ─", meta["name"])
+            try:
+                entries = _get_entries(meta)
+            except Exception as e:
+                print("    ⚠️ skip:", e)
+                continue
+            added = 0
+            for e in entries:
+                title_en = e["title"].strip()
+                link = e["link"].split("?")[0]
+                if not title_en or not link:
+                    continue
+                if cur.execute("SELECT 1 FROM articles WHERE link=?", (link,)).fetchone():
+                    continue
+                summary_en = e.get("summary", "").strip()
+                pub = e.get("published", "")[:25]
+                title_ja = translate_text_openai(title_en)
+                summary_ja = translate_text_openai(summary_en) if summary_en else None
+                cur.execute(
+                    """INSERT INTO articles
+                      (title_en,title_ja,link,summary_en,summary_ja,
+                       published,source_id,category,favorite)
+                      VALUES (?,?,?,?,?,?,?,? ,0)""",
+                    (
+                        title_en,
+                        title_ja,
+                        link,
+                        summary_en,
+                        summary_ja,
+                        pub,
+                        sid,
+                        meta["category"],
+                    ),
+                )
+                added += 1
+            print(f"    +{added}")
+        conn.commit()
+    print("[feeds] end")
 
-# ── Index helpers ------------------------------------------------------
-def _render_index(only_fav: bool):
-    where = "WHERE favorite=1" if only_fav else ""
-    with closing(get_db()) as c:
-        rows = c.execute(f"""
-            SELECT id,title_ja,favorite,analysis_ja,pdf_url
-              FROM papers {where}
-          ORDER BY created_at DESC
-        """).fetchall()
-    papers=[]
+def _get_entries(meta: dict):
+    kind = meta.get("scrape")
+    if kind == "gh":
+        return _scrape_github()
+    if kind == "hf":
+        return _scrape_hf()
+    if kind == "pwc":
+        return _scrape_pwc()
+    if kind == "batch":
+        return _scrape_batch()
+    r = requests.get(meta["url"], headers=UA, timeout=20)
+    r.raise_for_status()
+    return feedparser.parse(r.content).entries
+
+def _scrape_github():
+    htmltxt = requests.get("https://github.com/trending?since=daily", headers=UA, timeout=20).text
+    soup = BeautifulSoup(htmltxt, "html.parser")
+    results = []
+    for row in soup.select("article.Box-row"):
+        a_tag = row.select_one("h3 > a, h2 > a")
+        if not a_tag:
+            continue
+        desc_tag = row.select_one("p")
+        results.append(
+            {
+                "title": a_tag.get_text(" ", strip=True),
+                "link": "https://github.com" + a_tag["href"],
+                "summary": desc_tag.get_text(strip=True) if desc_tag else "",
+            }
+        )
+    return results
+
+def _scrape_hf():
+    htmltxt = requests.get("https://huggingface.co/papers", headers=UA, timeout=20).text
+    soup = BeautifulSoup(htmltxt, "html.parser")
+    for li in soup.select("li.paper-item"):
+        h = li.select_one("h4") or li.select_one("h3")
+        a = li.select_one("a[href*='/papers/']")
+        if not h or not a:
+            continue
+        p = li.select_one("p")
+        yield {
+            "title": h.get_text(strip=True),
+            "link": "https://huggingface.co" + a["href"],
+            "summary": p.get_text(strip=True) if p else "",
+        }
+
+def _scrape_pwc():
+    htmltxt = requests.get("https://paperswithcode.com/trending", headers=UA, timeout=20).text
+    soup = BeautifulSoup(htmltxt, "html.parser")
+    for card in soup.select("div.paper-card"):
+        h = card.select_one("h1 a")
+        abs_p = card.select_one("p[itemprop='description']")
+        if not h:
+            continue
+        yield {
+            "title": h.get_text(strip=True),
+            "link": "https://paperswithcode.com" + h["href"],
+            "summary": abs_p.get_text(strip=True) if abs_p else "",
+        }
+
+def _scrape_batch():
+    htmltxt = requests.get("https://www.deeplearning.ai/the-batch/", headers=UA, timeout=20).text
+    soup = BeautifulSoup(htmltxt, "html.parser")
+    for art in soup.select("article.post-preview, div.post-block"):
+        h = art.select_one("h3") or art.select_one("h2")
+        a = art.select_one("a[href]")
+        if not h or not a:
+            continue
+        p = art.select_one("div.excerpt") or art.select_one("p")
+        yield {
+            "title": h.get_text(strip=True),
+            "link": a["href"],
+            "summary": p.get_text(strip=True) if p else "",
+        }
+
+# ───────────────────────── UI Helpers
+MD_EXT = ["fenced_code", "tables", "toc"]
+
+def group_arxiv(fav: bool = False):
+    where = "WHERE favorite=1" if fav else ""
+    with closing(get_db()) as conn:
+        rows = conn.execute(
+            f"""
+          SELECT id,title_ja,favorite,analysis_ja,pdf_url,
+                 substr(created_at,1,10) AS cdate
+            FROM papers {where}
+        ORDER BY created_at DESC"""
+        ).fetchall()
+    out = {}
     for r in rows:
-        html=markdown.markdown(r["analysis_ja"] or "",extensions=MD_EXT)
-        papers.append({**dict(r),"analysis_html":html})
-    return render_template("index.html", papers=papers, only_fav=only_fav)
+        out.setdefault(r["cdate"], []).append(
+            {
+                **dict(r),
+                "analysis_html": markdown.markdown(r["analysis_ja"] or "", extensions=MD_EXT),
+            }
+        )
+    return sorted(out.items(), reverse=True)
 
-# ── Routes -------------------------------------------------------------
+def ext_by_cat(fav: bool = False, days: int = 90, limit: int = 60):
+    where = "WHERE favorite=1" if fav else ""
+    with closing(get_db()) as conn:
+        rows = conn.execute(
+            f"""
+            SELECT *,substr(created_at,1,10) AS cdate FROM articles {where}
+        ORDER BY created_at DESC"""
+        ).fetchall()
+    cats = {"paper": {}, "news": {}, "blog": {}}
+    for r in rows:
+        g = cats[r["category"]].setdefault(r["cdate"], [])
+        if len(g) < limit:
+            g.append(r)
+    for cat in cats:
+        cats[cat] = dict(list(cats[cat].items())[: days])
+    return cats
+
+# ───────────────────────── Routes
+def _render_index(fav: bool = False):
+    arxiv = group_arxiv(fav)
+    return render_template(
+        "index.html",
+        arxiv_days=dict(arxiv),
+        ordered_dates=[d for d, _ in arxiv],
+        ext_by_cat=ext_by_cat(fav),
+        fav_only=fav,
+    )
+
 @app.route("/")
-def index(): return _render_index(False)
+def index():
+    return _render_index(False)
 
 @app.route("/favorites")
-def favorites(): return _render_index(True)
+def favorites():
+    return _render_index(True)
 
 @app.route("/paper/<int:paper_id>")
-def paper_detail(paper_id:int):
-    with closing(get_db()) as c:
-        p=c.execute("SELECT * FROM papers WHERE id=?", (paper_id,)).fetchone()
-        if not p: return redirect(url_for("index"))
-        qa_rows=c.execute("""
-              SELECT question, answer_md, created_at
-                FROM qa
-               WHERE paper_id=?
-            ORDER BY created_at DESC
-        """,(paper_id,)).fetchall()
-    analysis_html=markdown.markdown(p["analysis_ja"] or "",extensions=MD_EXT)
-    qa_list=[{
-        "question":row["question"],
-        "answer_html":markdown.markdown(row["answer_md"],extensions=MD_EXT),
-        "created_at":row["created_at"].split("T")[0]
-    } for row in qa_rows]
-    return render_template("paper.html", paper=p,
-                           analysis_html=analysis_html,
-                           qa_list=qa_list)
+def paper_detail(paper_id: int):
+    with closing(get_db()) as conn:
+        p = conn.execute("SELECT * FROM papers WHERE id=?", (paper_id,)).fetchone()
+        if not p:
+            return redirect(url_for("index"))
+        qa = conn.execute(
+            "SELECT * FROM qa WHERE paper_id=? ORDER BY created_at DESC", (paper_id,)
+        ).fetchall()
+    analysis_html = markdown.markdown(p["analysis_ja"] or "", extensions=MD_EXT)
+    qa_list = [
+        {
+            "question": q["question"],
+            "answer_html": markdown.markdown(q["answer_md"], extensions=MD_EXT),
+            "created_at": q["created_at"][:10],
+        }
+        for q in qa
+    ]
+    return render_template("paper.html", paper=p, analysis_html=analysis_html, qa_list=qa_list)
 
-# ── API: favorite ------------------------------------------------------
-@app.route("/api/favorite/<int:paper_id>", methods=["POST"])
-def api_favorite(paper_id:int):
-    fav=1 if request.get_json(force=True).get("favorite") else 0
-    with closing(get_db()) as c:
-        c.execute("UPDATE papers SET favorite=? WHERE id=?", (fav,paper_id)); c.commit()
-    return jsonify(ok=True,favorite=bool(fav)),200
+@app.route("/api/favorite/<tbl>/<int:rid>", methods=["POST"])
+def api_fav(tbl: str, rid: int):
+    fav = 1 if request.json.get("favorite") else 0
+    table = "papers" if tbl == "paper" else "articles"
+    with closing(get_db()) as conn:
+        conn.execute(f"UPDATE {table} SET favorite=? WHERE id=?", (fav, rid))
+        conn.commit()
+    return jsonify(ok=True, favorite=bool(fav))
 
-# ── API: ask -----------------------------------------------------------
+# ───────────────────────── Q&A API
 @app.route("/api/ask", methods=["POST"])
 def api_ask():
-    d=request.get_json(force=True); pid=int(d["paper_id"]); q=d["question"]
-    with closing(get_db()) as c:
-        paper=c.execute("SELECT * FROM papers WHERE id=?", (pid,)).fetchone()
-        if not paper: return jsonify(error="paper not found"),404
+    """
+    JSON 形式:
+      {
+        "paper_id": 123,
+        "question": "〜〜とは何ですか？"
+      }
+    返り値:
+      {
+        "answer_html": "<p>回答 (Markdown → HTML)</p>",
+        "question": "質問",
+        "created_at": "YYYY-MM-DD"
+      }
+    """
+    data = request.json or {}
+    try:
+        pid = int(data["paper_id"])
+        question = data["question"].strip()
+    except Exception:
+        return jsonify(error="invalid payload"), 400
+    if not question:
+        return jsonify(error="empty question"), 400
+
+    with closing(get_db()) as conn:
+        p = conn.execute("SELECT * FROM papers WHERE id=?", (pid,)).fetchone()
+    if not p:
+        return jsonify(error="paper not found"), 404
 
     import openai
-    answer_md=openai.chat.completions.create(
-        model=os.getenv("OPENAI_MODEL_NAME","gpt-4.1-mini"),
-        messages=[
-            {"role":"system","content":"日本語で Markdown 形式で回答してください"},
-            {"role":"user","content":f"{paper['title_ja']}\n\n{paper['analysis_ja']}\n\n【質問】{q}"}
-        ],
-        temperature=0.3
-    ).choices[0].message.content.strip()
-    answer_html=markdown.markdown(answer_md,extensions=MD_EXT)
 
-    with closing(get_db()) as c:
-        c.execute("INSERT INTO qa (paper_id,question,answer_md) VALUES (?,?,?)",
-                  (pid,q,answer_md)); c.commit()
+    @backoff.on_exception(backoff.expo, openai.OpenAIError, max_tries=3)
+    def _chat_completion(msgs):
+        return (
+            openai.chat.completions.create(
+                model=os.getenv("OPENAI_MODEL_NAME", "gpt-4o-mini"),
+                messages=msgs,
+                temperature=0.3,
+            )
+            .choices[0]
+            .message.content.strip()
+        )
 
-    return jsonify(answer_html=answer_html, question=q),200
+    system_prompt = "あなたは論文解説アシスタントです。回答は日本語で Markdown 形式で返してください。"
+    user_prompt = f"""論文タイトル:
+{p["title_ja"]}
 
-# ── CLI ----------------------------------------------------------------
-if __name__=="__main__":
-    import argparse,sys
-    a=argparse.ArgumentParser(); a.add_argument("--init-db",action="store_true"); a.add_argument("--fetch",action="store_true")
-    opt=a.parse_args(sys.argv[1:])
-    if opt.init_db: init_db(); print("DB initialized.")
-    elif opt.fetch: scheduled_fetch_job()
+要約:
+{p["analysis_ja"]}
+
+質問:
+{question}
+"""
+    answer_md = _chat_completion(
+        [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+    )
+
+    with closing(get_db()) as conn:
+        conn.execute(
+            "INSERT INTO qa (paper_id, question, answer_md) VALUES (?,?,?)",
+            (pid, question, answer_md),
+        )
+        conn.commit()
+
+    answer_html = markdown.markdown(answer_md, extensions=MD_EXT)
+    return jsonify(
+        answer_html=answer_html,
+        question=question,
+        created_at=datetime.now().strftime("%Y-%m-%d"),
+    )
+
+# ───────────────────────── CLI 起動
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--fetch-arxiv", action="store_true")
+    parser.add_argument("--fetch-feeds", action="store_true")
+    args = parser.parse_args()
+
+    if args.fetch_arxiv:
+        fetch_arxiv()
+    elif args.fetch_feeds:
+        fetch_feeds()
     else:
-        if not os.path.exists(DB_PATH): init_db()
-        app.run(debug=True,host="0.0.0.0",port=int(os.getenv("PORT",8000)))
+        if not os.path.exists(DB_PATH):
+            init_db()
+        app.run(debug=True, host="0.0.0.0", port=8000)

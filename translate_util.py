@@ -2,7 +2,7 @@ from __future__ import annotations
 import os, backoff, openai
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
-MODEL = os.getenv("OPENAI_MODEL_NAME", "gpt-4.1-mini")
+MODEL = os.getenv("OPENAI_MODEL_NAME", "gpt-4o-mini")
 
 @backoff.on_exception(backoff.expo, openai.OpenAIError, max_tries=5, jitter=None)
 def _chat(msgs):  # type: ignore[valid-type]
