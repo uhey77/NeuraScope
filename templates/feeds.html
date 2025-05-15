@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>NeuraScope – 外部フィード</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/modern-css-reset/dist/reset.min.css">
+<style>
+ body{font-family:system-ui,sans-serif;margin:2rem}
+ .card{margin-bottom:1rem;padding:1rem;border:1px solid #ddd;border-radius:.75rem}
+</style>
+</head>
+<body>
+<h1>外部フィード</h1>
+
+<select id="cat" onchange="location.href='?cat='+this.value">
+  <option value="paper" {% if cat=='paper' %}selected{% endif %}>📄 論文フィード</option>
+  <option value="news"  {% if cat=='news'  %}selected{% endif %}>📰 ニュース</option>
+  <option value="blog"  {% if cat=='blog'  %}selected{% endif %}>💡 技術ブログ</option>
+</select>
+
+{% for a in rows %}
+  <article class="card">
+    <h3>
+      <a href="{{ a.link }}" target="_blank" rel="noopener">
+        {{ a.title_ja or a.title_en }}
+      </a>
+    </h3>
+    {% if a.summary_ja or a.summary_en %}
+      <p>{{ a.summary_ja or a.summary_en | safe }}</p>
+    {% endif %}
+    <small>{{ a.published or a.created_at.split('T')[0] }}</small>
+  </article>
+{% else %}
+  <p>まだ記事がありません。<br>
+     <code>python app.py --fetch-feeds</code> を実行してください。</p>
+{% endfor %}
+</body></html>
