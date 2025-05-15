@@ -5,41 +5,86 @@
 <title>NeuraScope</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/modern-css-reset/dist/reset.min.css">
 <style>
-body{font-family:system-ui,sans-serif;margin:0;padding:0 0 2rem}
+body{font-family:system-ui,sans-serif;margin:0;padding:0;line-height:1.5}
 header{background:#0077cc;color:#fff;padding:.6rem 1rem;font-size:1.3rem;font-weight:bold}
-.wrapper{padding:1.2rem}
-.tabbar{display:flex;gap:.6rem;margin-bottom:1rem}
-.tabbar button{padding:.4rem 1rem;border:1px solid #0077cc;background:#fff;color:#0077cc}
+
+/* グリッドレイアウト */
+.container{display:grid;grid-template-columns:250px 1fr;min-height:calc(100vh - 47px)}
+.sidebar{background:#f5f5f5;padding:1rem;border-right:1px solid #ddd;overflow-y:auto}
+.main-content{padding:1.2rem;overflow-y:auto}
+
+/* タブバー */
+.tabbar{display:flex;gap:.6rem;margin-bottom:1rem;flex-wrap:wrap}
+.tabbar button{padding:.4rem 1rem;border:1px solid #0077cc;background:#fff;color:#0077cc;cursor:pointer}
 .tabbar button.active{background:#0077cc;color:#fff}
+
+/* カードとアイテム */
 .card{border:1px solid #ddd;border-radius:.75rem;padding:1rem;margin-block:1rem;position:relative}
 .fav{position:absolute;top:.4rem;right:.5rem;border:none;background:none;font-size:1.4rem;cursor:pointer}
-select{margin-bottom:.8rem}
-.toc{margin:.5rem 0}
+
+/* 目次 */
+.toc-dropdown{margin:.5rem 0 1rem}
+.sidebar h3{font-size:1.1rem;font-weight:bold;margin:1rem 0 .5rem;color:#0077cc}
+.sidebar-toc{margin-bottom:1.5rem}
+.sidebar-toc ul{list-style:none;padding:0;margin:0}
+.sidebar-toc li{margin-bottom:.3rem}
+.sidebar-toc a{display:block;padding:.3rem .5rem;text-decoration:none;color:#333;border-radius:.25rem}
+.sidebar-toc a:hover{background:#e9e9e9}
+.sidebar-toc a.active{background:#0077cc;color:#fff}
+.sidebar-toc .date-heading{font-weight:bold;margin-top:.8rem;padding-top:.8rem;border-top:1px solid #ddd}
+.sidebar-toc .date-heading:first-child{border-top:none;margin-top:0;padding-top:0}
+
+/* 見出し */
+h3{margin-top:1.5rem;margin-bottom:0.5rem;font-size:1.2rem;font-weight:bold;color:#0077cc}
+.source{margin-top:0.5rem;color:#666}
+.grp h3, .grp-paper h3, .grp-news h3, .grp-blog h3, .grp-favorites h3 {
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid #eee;
+}
+
+/* モバイル対応 */
+@media (max-width: 768px) {
+  .container{grid-template-columns:1fr}
+  .sidebar{display:none}
+  .toc-dropdown{display:block}
+}
+@media (min-width: 769px) {
+  .toc-dropdown{display:none}
+}
 </style>
 </head>
 <body>
 
 <header>NeuraScope</header>
-<div class="wrapper">
-
-<nav class="tabbar">
-  <button data-tab="arxiv" class="active">arXiv</button>
+<div class="container">
+  <!-- 左サイドバーメニュー -->
+  <div class="sidebar">
+    <div id="sidebar-toc-container">
+      <!-- JavaScriptでタブ切替時に内容生成 -->
+    </div>
+  </div>
+  
+  <!-- メインコンテンツ -->
+  <div class="main-content">
+    <nav class="tabbar">
+  <button data-tab="arxiv" {% if not fav_only %}class="active"{% endif %}>arXiv</button>
   <button data-tab="paper">論文フィード</button>
   <button data-tab="news">ニュース</button>
   <button data-tab="blog">技術ブログ</button>
-  <button onclick="location.href='/favorites'">★ お気に入り</button>
+  <button data-tab="favorites" {% if fav_only %}class="active"{% endif %}>★ お気に入り</button>
 </nav>
 
-<div class="toc">
+<div class="toc-dropdown">
   <label>目次:
     <select id="toc-select"></select>
   </label>
 </div>
 
 <!-- arXiv -->
-<section id="tab-arxiv">
+<section id="tab-arxiv" {% if fav_only %}style="display:none"{% endif %}>
   {% for d,plist in arxiv_days.items() %}
     <div class="grp" id="arxiv-{{d}}" {% if not loop.first %}style="display:none"{% endif %}>
+      <h3>arXiv ({{d}})</h3>
       {% for p in plist %}
       <article class="card">
         <button class="fav" data-kind="paper" data-id="{{p.id}}">{{ '★' if p.favorite else '☆' }}</button>
@@ -53,23 +98,77 @@ select{margin-bottom:.8rem}
 
 <!-- 外部フィード -->
 {% for cat in ['paper','news','blog'] %}
-<section id="tab-{{cat}}" style="display:none">
+<section id="tab-{{cat}}" {% if fav_only %}style="display:none"{% else %}style="display:none"{% endif %}>
   {% for d,alist in ext_by_cat[cat].items() %}
     <div class="grp-{{cat}}" id="{{cat}}-{{d}}" {% if not loop.first %}style="display:none"{% endif %}>
+      <h3>{{ {'paper': '論文フィード', 'news': 'ニュース', 'blog': '技術ブログ'}[cat] }} ({{d}})</h3>
       {% for a in alist %}
       <article class="card">
         <button class="fav" data-kind="article" data-id="{{a.id}}">{{ '★' if a.favorite else '☆' }}</button>
-        <h4><a href="{{ a.link }}" target="_blank">{{ a.title_ja or a.title_en }}</a></h4>
+        <h4><a href="{{ url_for('article_detail', article_id=a.id) }}">{{ a.title_ja or a.title_en }}</a></h4>
         {% if a.summary_ja or a.summary_en %}
           <p>{{ a.summary_ja or a.summary_en }}</p>
         {% endif %}
+        <div class="source"><small>出典: {{ a.source_id }}</small></div>
       </article>
       {% endfor %}
     </div>
   {% endfor %}
 </section>
 {% endfor %}
-</div><!-- /.wrapper -->
+<!-- お気に入り一覧 -->
+<section id="tab-favorites" {% if not fav_only %}style="display:none"{% endif %}>
+  <h2>お気に入り</h2>
+  {% set has_favorites = false %}
+  
+  <!-- arXiv お気に入り -->
+  {% set arxiv_fav_groups = [] %}
+  {% for d,plist in arxiv_days.items() %}
+    {% if plist|length > 0 %}
+      {% set has_favorites = true %}
+      {% set _ = arxiv_fav_groups.append(d) %}
+      <div class="grp-favorites" id="fav-arxiv-{{d}}" {% if not loop.first %}style="display:none"{% endif %}>
+        <h3>arXiv お気に入り ({{d}})</h3>
+        {% for p in plist %}
+        <article class="card">
+          <button class="fav" data-kind="paper" data-id="{{p.id}}">★</button>
+          <h3><a href="{{ url_for('paper_detail', paper_id=p.id) }}">{{ p.title_ja }}</a></h3>
+          {{ p.analysis_html|safe }}
+        </article>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endfor %}
+  
+  <!-- 外部フィード お気に入り -->
+  {% set ext_fav_shown = false %}
+  {% for cat in ['paper','news','blog'] %}
+    {% for d,alist in ext_by_cat[cat].items() %}
+      {% if alist|length > 0 %}
+        {% set has_favorites = true %}
+        <div class="grp-favorites" id="fav-{{cat}}-{{d}}" 
+             {% if arxiv_fav_groups|length > 0 or ext_fav_shown %}style="display:none"{% else %}{% set ext_fav_shown = true %}{% endif %}>
+          <h3>{{ {'paper': '論文フィード', 'news': 'ニュース', 'blog': '技術ブログ'}[cat] }} お気に入り ({{d}})</h3>
+          {% for a in alist %}
+          <article class="card">
+            <button class="fav" data-kind="article" data-id="{{a.id}}">★</button>
+            <h4><a href="{{ url_for('article_detail', article_id=a.id) }}">{{ a.title_ja or a.title_en }}</a></h4>
+            {% if a.summary_ja or a.summary_en %}
+              <p>{{ a.summary_ja or a.summary_en }}</p>
+            {% endif %}
+          </article>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endfor %}
+  {% endfor %}
+  
+  {% if not has_favorites %}
+    <p>お気に入りが表示されます。まだお気に入りに追加されたアイテムはありません。</p>
+  {% endif %}
+</section>
+</div><!-- /.main-content -->
+</div><!-- /.container -->
 
 <script>
 /* タブ切替 */
@@ -83,6 +182,7 @@ tabs.forEach(btn=>{
       sec.style.display=sec.id===id?"":"none";
     });
     populateToc(btn.dataset.tab);
+    updateSidebarToc(btn.dataset.tab);
   };
 });
 
@@ -90,29 +190,244 @@ tabs.forEach(btn=>{
 function populateToc(cat){
   const sel=document.getElementById("toc-select");
   sel.innerHTML="";
-  const selector=cat==="arxiv"?".grp":".grp-"+cat;
+  let selector;
+  
+  if (cat === "favorites") {
+    selector = ".grp-favorites";
+  } else if (cat === "arxiv") {
+    selector = ".grp";
+  } else {
+    selector = ".grp-" + cat;
+  }
+  
   document.querySelectorAll(selector).forEach(div=>{
-    const d=div.id.split("-").pop();
-    sel.insertAdjacentHTML("beforeend",`<option value="${div.id}">${d}</option>`);
+    const parts = div.id.split("-");
+    let label;
+    
+    if (cat === "favorites") {
+      // お気に入りの場合はカテゴリ名も表示
+      const category = parts[1];
+      const date = parts[parts.length-1];
+      label = `${category}: ${date}`;
+    } else {
+      // 通常表示の場合は日付のみ
+      const d = parts[parts.length-1];
+      label = d;
+    }
+    
+    sel.insertAdjacentHTML("beforeend", `<option value="${div.id}">${label}</option>`);
   });
+  
+  // 選択項目がない場合の処理
+  if (sel.options.length === 0) {
+    sel.insertAdjacentHTML("beforeend", `<option value="none">表示項目なし</option>`);
+  }
+  
   sel.onchange=e=>{
     const id=e.target.value;
+    if (id === "none") return;
+    
     document.querySelectorAll(selector).forEach(div=>{
       div.style.display=div.id===id?"":"none";
     });
+    
+    // サイドバーのアクティブ状態を更新
+    document.querySelectorAll('.sidebar-toc a').forEach(a => {
+      a.classList.toggle('active', a.dataset.target === id);
+    });
   };
-  sel.dispatchEvent(new Event("change"));
+  
+  // 選択項目がある場合のみイベント発火
+  if (sel.options.length > 0) {
+    sel.dispatchEvent(new Event("change"));
+  }
 }
-populateToc("arxiv");
+
+/* サイドバー目次生成 */
+function updateSidebarToc(cat) {
+  const container = document.getElementById("sidebar-toc-container");
+  let selector;
+  let title;
+  
+  if (cat === "favorites") {
+    selector = ".grp-favorites";
+    title = "お気に入り";
+  } else if (cat === "arxiv") {
+    selector = ".grp";
+    title = "arXiv";
+  } else if (cat === "paper") {
+    selector = ".grp-paper";
+    title = "論文フィード";
+  } else if (cat === "news") {
+    selector = ".grp-news";
+    title = "ニュース";
+  } else if (cat === "blog") {
+    selector = ".grp-blog";
+    title = "技術ブログ";
+  }
+  
+  // 目次作成
+  let html = `<h3>タブ: ${title}</h3>`;
+  html += '<div class="sidebar-toc">';
+  
+  // 日付でグループ化
+  const dateGroups = {};
+  document.querySelectorAll(selector).forEach(div => {
+    const parts = div.id.split("-");
+    const date = parts[parts.length-1];
+    
+    if (!dateGroups[date]) {
+      dateGroups[date] = [];
+    }
+    
+    // その日の記事数をカウント
+    const articleCount = div.querySelectorAll('article.card').length;
+    dateGroups[date].push({id: div.id, count: articleCount});
+  });
+  
+  // 日付がない場合の処理
+  if (Object.keys(dateGroups).length === 0) {
+    html += '<p>表示する項目がありません。</p>';
+  } else {
+    html += '<ul>';
+    Object.keys(dateGroups).sort().reverse().forEach(date => {
+      html += `<li class="date-heading">${date}</li>`;
+      
+      // その日のグループを表示
+      dateGroups[date].forEach(group => {
+        const isFirstGroup = group.id === document.querySelector(selector).id;
+        let displayClass = '';
+        if (isFirstGroup) displayClass = 'active';
+        
+        // タイトル生成
+        let linkTitle;
+        if (cat === "favorites") {
+          const parts = group.id.split("-");
+          const category = parts[1];
+          const categoryLabels = {
+            'arxiv': 'arXiv',
+            'paper': '論文フィード',
+            'news': 'ニュース',
+            'blog': '技術ブログ'
+          };
+          linkTitle = `${categoryLabels[category] || category} (${group.count})`;
+        } else {
+          linkTitle = `${date} (${group.count})`;
+        }
+        
+        html += `<li><a href="#" class="${displayClass}" data-target="${group.id}">${linkTitle}</a></li>`;
+      });
+    });
+    html += '</ul>';
+  }
+  
+  html += '</div>';
+  container.innerHTML = html;
+  
+  // クリックイベント追加
+  document.querySelectorAll('.sidebar-toc a').forEach(a => {
+    a.addEventListener('click', function(e) {
+      e.preventDefault();
+      const targetId = this.dataset.target;
+      
+      // 全てのグループを非表示
+      document.querySelectorAll(selector).forEach(div => {
+        div.style.display = 'none';
+      });
+      
+      // クリックされたグループを表示
+      const targetGroup = document.getElementById(targetId);
+      if (targetGroup) {
+        targetGroup.style.display = '';
+      }
+      
+      // アクティブクラスの切り替え
+      document.querySelectorAll('.sidebar-toc a').forEach(link => {
+        link.classList.remove('active');
+      });
+      this.classList.add('active');
+      
+      // ドロップダウンメニューも選択した項目に合わせる
+      const select = document.getElementById('toc-select');
+      for (let i = 0; i < select.options.length; i++) {
+        if (select.options[i].value === targetId) {
+          select.selectedIndex = i;
+          break;
+        }
+      }
+    });
+  });
+}
+
+// 初期表示用のタブを選択
+const initialTab = {% if fav_only %}"favorites"{% else %}"arxiv"{% endif %};
+populateToc(initialTab);
+updateSidebarToc(initialTab);
 
 /* お気に入りトグル */
 function toggleFav(btn){
-  fetch(`/api/favorite/${btn.dataset.kind}/${btn.dataset.id}`,{
+  const newIsFavorite = btn.textContent === "☆"; // ☆ = 白星、クリック時にお気に入りにする
+  const id = btn.dataset.id;
+  const kind = btn.dataset.kind;
+  
+  fetch(`/api/favorite/${kind}/${id}`,{
     method:"POST",
     headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({favorite:btn.textContent==="☆"})
+    body:JSON.stringify({favorite:newIsFavorite})
   }).then(r=>r.json()).then(j=>{
-    if(j.ok) btn.textContent=j.favorite?"★":"☆";
+    if(j.ok) {
+      btn.textContent = j.favorite ? "★" : "☆";
+      
+      // お気に入り解除時にお気に入りタブ表示中であれば、その要素を非表示にする
+      if (!j.favorite && document.querySelector(".tabbar button[data-tab='favorites']").classList.contains("active")) {
+        // 要素の親カードを非表示にする
+        const card = btn.closest('.card');
+        if (card) {
+          card.style.display = "none";
+          
+          // カードが消えた後、そのカテゴリの表示が必要か確認
+          const parentGroup = card.parentElement;
+          let hasVisibleCards = false;
+          
+          // 子要素のカードで表示されているものがあるかチェック
+          parentGroup.querySelectorAll('.card').forEach(c => {
+            if (c.style.display !== "none") {
+              hasVisibleCards = true;
+            }
+          });
+          
+          // 表示されるカードがなければ、グループも非表示に
+          if (!hasVisibleCards) {
+            parentGroup.style.display = "none";
+            
+            // 別の表示可能なグループを探して表示
+            const otherGroups = document.querySelectorAll('.grp-favorites');
+            let foundVisibleGroup = false;
+            
+            otherGroups.forEach(group => {
+              if (group !== parentGroup && group.querySelectorAll('.card').length > 0) {
+                group.style.display = "";
+                foundVisibleGroup = true;
+                // 最初に見つかった表示可能なグループだけ表示
+                return false;
+              }
+            });
+            
+            // 表示できるグループがない場合は、「お気に入りなし」メッセージを表示
+            if (!foundVisibleGroup) {
+              document.querySelector('#tab-favorites').innerHTML = 
+                '<h2>お気に入り</h2><p>お気に入りが表示されます。まだお気に入りに追加されたアイテムはありません。</p>';
+              
+              // 選択メニューを更新
+              populateToc('favorites');
+            }
+          }
+          
+          // 選択メニューを更新
+          populateToc('favorites');
+        }
+      }
+    }
   });
 }
 document.addEventListener("click",e=>{

@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>{{ article.title_ja or article.title_en }} - NeuraScope</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/modern-css-reset/dist/reset.min.css">
+<style>
+body{font-family:system-ui,sans-serif;margin:0;padding:0;line-height:1.5}
+header{background:#0077cc;color:#fff;padding:.6rem 1rem;font-size:1.3rem;font-weight:bold}
+header a, header a:hover{color:white;text-decoration:none}
+
+/* レイアウト */
+.container{max-width:900px;margin:0 auto;padding:1.5rem}
+.card{border:1px solid #ddd;border-radius:.75rem;padding:1.5rem;margin-block:1.5rem}
+.back{margin-bottom:1rem;display:inline-block}
+.metadata{color:#666;margin-bottom:1rem;border-bottom:1px solid #eee;padding-bottom:0.5rem}
+.original-link{margin-bottom:1rem}
+.question-form{margin-top:2rem;border-top:1px solid #eee;padding-top:1.5rem}
+.qa-section{margin-top:2rem}
+.qa-item{margin-bottom:1.5rem}
+.question{font-weight:bold;margin-bottom:0.3rem}
+.answer{background:#f5f7f9;padding:1rem;border-radius:0.5rem}
+.date{color:#666;font-size:0.9rem;margin-top:0.5rem}
+
+/* フォーム要素 */
+textarea{width:100%;padding:0.5rem;border:1px solid #ddd;border-radius:0.3rem;font-family:inherit;box-sizing:border-box;min-height:100px}
+button{background:#0077cc;color:#fff;border:none;padding:0.5rem 1rem;border-radius:0.3rem;cursor:pointer;font-size:1rem}
+button:hover{background:#0066b3}
+
+h1{font-size:1.5rem;font-weight:bold;margin-bottom:1rem}
+h2{font-size:1.3rem;font-weight:bold;margin-top:2rem;margin-bottom:1rem;color:#0077cc}
+h3{font-size:1.1rem;font-weight:bold;margin-top:1.5rem;margin-bottom:0.5rem}
+</style>
+</head>
+<body>
+
+<header>
+  <a href="{{ url_for('index') }}">NeuraScope</a>
+</header>
+
+<div class="container">
+  <a href="{{ url_for('index') }}" class="back">← トップページに戻る</a>
+  
+  <article class="card">
+    <h1>{{ article.title_ja or article.title_en }}</h1>
+    
+    <div class="metadata">
+      <div>カテゴリ: {{ category_label }}</div>
+      {% if article.authors is defined %}
+        <div>著者: {{ article.authors }}</div>
+      {% endif %}
+      {% if article.published_at is defined %}
+        <div>公開日: {{ article.published_at }}</div>
+      {% elif article.published is defined %}
+        <div>公開日: {{ article.published or 'N/A' }}</div>
+      {% endif %}
+      {% if article.arxiv_id is defined %}
+        <div>arXiv ID: {{ article.arxiv_id }}</div>
+      {% endif %}
+    </div>
+    
+    {% if article.link is defined %}
+    <div class="original-link">
+      <a href="{{ article.link }}" target="_blank">元記事を読む ↗</a>
+    </div>
+    {% elif article.pdf_url is defined %}
+    <div class="original-link">
+      <a href="{{ article.pdf_url }}" target="_blank">PDFを開く ↗</a>
+    </div>
+    {% endif %}
+    
+    {% if article.analysis_ja is defined %}
+      <h2>要約</h2>
+      <div>{{ article.analysis_ja|safe }}</div>
+    {% elif article.summary_ja is defined and article.summary_ja %}
+      <h2>要約</h2>
+      <p>{{ article.summary_ja }}</p>
+    {% elif article.summary_en is defined and article.summary_en %}
+      <h2>要約</h2>
+      <p>{{ article.summary_en }}</p>
+    {% endif %}
+  </article>
+  
+  <div class="question-form">
+    <h2>AIに質問する</h2>
+    <div id="question-container">
+      <textarea id="question" placeholder="この記事について質問してください..."></textarea>
+      <button id="send-question" onclick="askQuestion()">質問する</button>
+    </div>
+  </div>
+  
+  <div class="qa-section">
+    <div id="answer-container"></div>
+    
+    {% if qa_list %}
+      <h2>過去の質問</h2>
+      {% for qa in qa_list %}
+        <div class="qa-item">
+          <div class="question">Q: {{ qa.question }}</div>
+          <div class="answer">{{ qa.answer_html|safe }}</div>
+          <div class="date">{{ qa.created_at }}</div>
+        </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+</div>
+
+<script>
+function askQuestion() {
+  const question = document.getElementById('question').value.trim();
+  if (!question) return;
+  
+  const button = document.getElementById('send-question');
+  button.disabled = true;
+  button.textContent = '送信中...';
+  
+  {% if article_type == 'paper' %}
+  // papers用のエンドポイント
+  let endpoint = '/api/ask';
+  let requestData = {
+    paper_id: {{ article.id }},
+    question: question
+  };
+  {% else %}
+  // articles用のエンドポイント
+  let endpoint = '/api/ask-article';
+  let requestData = {
+    article_id: {{ article.id }},
+    question: question
+  };
+  {% endif %}
+  
+  fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestData)
+  })
+  .then(r => r.json())
+  .then(data => {
+    // エラー処理
+    if (data.error) {
+      alert('エラー: ' + data.error);
+      button.disabled = false;
+      button.textContent = '質問する';
+      return;
+    }
+    
+    // 回答を表示
+    const answerContainer = document.getElementById('answer-container');
+    const qaItem = document.createElement('div');
+    qaItem.className = 'qa-item';
+    qaItem.innerHTML = `
+      <div class="question">Q: ${data.question}</div>
+      <div class="answer">${data.answer_html}</div>
+      <div class="date">${data.created_at}</div>
+    `;
+    answerContainer.insertBefore(qaItem, answerContainer.firstChild);
+    
+    // フォームをリセット
+    document.getElementById('question').value = '';
+    button.disabled = false;
+    button.textContent = '質問する';
+  })
+  .catch(err => {
+    alert('エラーが発生しました: ' + err);
+    button.disabled = false;
+    button.textContent = '質問する';
+  });
+}
+</script>
+
+</body>
+</html>

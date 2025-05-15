@@ -44,6 +44,15 @@ CREATE TABLE IF NOT EXISTS qa (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ────────── Q&A（外部フィード記事用）
+CREATE TABLE IF NOT EXISTS article_qa (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    article_id  INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+    question    TEXT NOT NULL,
+    answer_md   TEXT NOT NULL,
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_papers_fav   ON papers(favorite);
 CREATE INDEX IF NOT EXISTS idx_articles_cat ON articles(category);
 CREATE INDEX IF NOT EXISTS idx_articles_fav ON articles(favorite);

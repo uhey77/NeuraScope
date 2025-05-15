@@ -252,10 +252,105 @@ def index():
 
 @app.route("/favorites")
 def favorites():
+    # お気に入り表示用のページをレンダリング
     return _render_index(True)
+
+@app.route("/article/<int:article_id>")
+def article_detail(article_id: int):
+    """外部フィード記事の詳細ページ"""
+    # article_idがどのテーブルに属するか確認
+    article_type = "article"  # articleか paperか
+    
+    with closing(get_db()) as conn:
+        # まずparticlesテーブルを探す
+        a = conn.execute("SELECT * FROM articles WHERE id=?", (article_id,)).fetchone()
+        if not a:
+            # なければpapersテーブルを探す
+            a = conn.execute("SELECT * FROM papers WHERE id=?", (article_id,)).fetchone()
+            if not a:
+                return redirect(url_for("index"))
+            article_type = "paper"  # これはarXiv論文
+        
+        # article_qa テーブルが存在しない場合は作成
+        try:
+            conn.execute("SELECT 1 FROM article_qa LIMIT 1")
+        except sqlite3.OperationalError:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS article_qa (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    article_id  INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+                    question    TEXT NOT NULL,
+                    answer_md   TEXT NOT NULL,
+                    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+        
+        # Q&Aデータを取得
+        qa_list = []
+        if article_type == "article":
+            # articlesの場合はarticle_qaテーブルから取得
+            qa = conn.execute(
+                "SELECT * FROM article_qa WHERE article_id=? ORDER BY created_at DESC", (article_id,)
+            ).fetchall()
+            
+            if qa:
+                qa_list = [
+                    {
+                        "question": q["question"],
+                        "answer_html": markdown.markdown(q["answer_md"], extensions=MD_EXT),
+                        "created_at": q["created_at"][:10],
+                    }
+                    for q in qa
+                ]
+        else:
+            # papersの場合はqaテーブルから取得
+            qa = conn.execute(
+                "SELECT * FROM qa WHERE paper_id=? ORDER BY created_at DESC", (article_id,)
+            ).fetchall()
+            
+            if qa:
+                qa_list = [
+                    {
+                        "question": q["question"],
+                        "answer_html": markdown.markdown(q["answer_md"], extensions=MD_EXT),
+                        "created_at": q["created_at"][:10],
+                    }
+                    for q in qa
+                ]
+    
+    # aを辞書に変換
+    article_dict = dict(a)
+    
+    # カテゴリラベルを設定
+    if article_type == "paper":
+        category_label = "arXiv"
+        # papers用のテンプレートに修正するための追加情報
+        article_dict["is_arxiv"] = True
+    else:
+        category_map = {
+            'paper': '論文フィード',
+            'news': 'ニュース',
+            'blog': '技術ブログ'
+        }
+        category_label = category_map.get(article_dict.get("category", ""), "")
+        article_dict["is_arxiv"] = False
+    
+    # 質問用APIのエンドポイントを設定
+    api_endpoint = "api/ask-article" if article_type == "article" else "api/ask"
+    article_dict["api_endpoint"] = api_endpoint
+    
+    return render_template(
+        "article.html", 
+        article=article_dict, 
+        qa_list=qa_list,
+        category_label=category_label,
+        article_type=article_type
+    )
 
 @app.route("/paper/<int:paper_id>")
 def paper_detail(paper_id: int):
+    """arXiv論文の詳細ページ"""
     with closing(get_db()) as conn:
         p = conn.execute("SELECT * FROM papers WHERE id=?", (paper_id,)).fetchone()
         if not p:
@@ -348,6 +443,98 @@ def api_ask():
         conn.execute(
             "INSERT INTO qa (paper_id, question, answer_md) VALUES (?,?,?)",
             (pid, question, answer_md),
+        )
+        conn.commit()
+
+    answer_html = markdown.markdown(answer_md, extensions=MD_EXT)
+    return jsonify(
+        answer_html=answer_html,
+        question=question,
+        created_at=datetime.now().strftime("%Y-%m-%d"),
+    )
+
+@app.route("/api/ask-article", methods=["POST"])
+def api_ask_article():
+    """
+    外部フィード記事にAIが回答するAPI
+    JSON 形式:
+      {
+        "article_id": 123,
+        "question": "この記事について教えてください"
+      }
+    返り値:
+      {
+        "answer_html": "<p>回答 (Markdown → HTML)</p>",
+        "question": "質問",
+        "created_at": "YYYY-MM-DD"
+      }
+    """
+    data = request.json or {}
+    try:
+        article_id = int(data["article_id"])
+        question = data["question"].strip()
+    except Exception:
+        return jsonify(error="invalid payload"), 400
+    if not question:
+        return jsonify(error="empty question"), 400
+
+    with closing(get_db()) as conn:
+        a = conn.execute("SELECT * FROM articles WHERE id=?", (article_id,)).fetchone()
+    if not a:
+        return jsonify(error="article not found"), 404
+
+    import openai
+
+    @backoff.on_exception(backoff.expo, openai.OpenAIError, max_tries=3)
+    def _chat_completion(msgs):
+        return (
+            openai.chat.completions.create(
+                model=os.getenv("OPENAI_MODEL_NAME", "gpt-4o-mini"),
+                messages=msgs,
+                temperature=0.3,
+            )
+            .choices[0]
+            .message.content.strip()
+        )
+
+    system_prompt = """あなたは記事解説アシスタントです。
+与えられたタイトルと要約に基づいて、質問に日本語で回答してください。
+回答は Markdown 形式で返してください。"""
+    
+    user_prompt = f"""タイトル:
+{a["title_ja"] or a["title_en"]}
+
+要約:
+{a["summary_ja"] or a["summary_en"] or "要約なし"}
+
+出典: {a["source_id"]}
+リンク: {a["link"]}
+
+質問:
+{question}
+"""
+    answer_md = _chat_completion(
+        [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+    )
+
+    # 回答をデータベースに保存
+    with closing(get_db()) as conn:
+        # article_qa テーブルが存在しない場合は作成
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS article_qa (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                article_id  INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+                question    TEXT NOT NULL,
+                answer_md   TEXT NOT NULL,
+                created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute(
+            "INSERT INTO article_qa (article_id, question, answer_md) VALUES (?,?,?)",
+            (article_id, question, answer_md),
         )
         conn.commit()
 
